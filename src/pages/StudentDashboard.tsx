@@ -40,7 +40,8 @@ export const StudentDashboard = () => {
 
       const savedExams = localStorage.getItem('alakara_exams');
       if (savedExams) {
-        setExams(JSON.parse(savedExams).filter((e: any) => e.classes.includes(currentStudent.class)));
+        const studentClass = typeof currentStudent.class === 'string' ? currentStudent.class.trim() : (currentStudent.class?.name || '');
+        setExams(JSON.parse(savedExams).filter((e: any) => e.classes.some((c: string) => c.trim() === studentClass)));
       }
 
       const savedMarks = localStorage.getItem('alakara_marks');

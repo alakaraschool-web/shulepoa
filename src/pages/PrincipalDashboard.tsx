@@ -236,7 +236,11 @@ export const PrincipalDashboard = () => {
     const detailsY = margin + 45;
     doc.rect(margin, detailsY, pageWidth - (margin * 2), 25);
     
-    const classStudents = students.filter(s => s.class === student.class);
+    const classStudents = students.filter(s => {
+      const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
+      const targetClass = typeof student.class === 'string' ? student.class.trim() : (student.class?.name || '');
+      return studentClass === targetClass;
+    });
     const examId = reportConfig.selectedExamIds[0];
     const examMarks = marks.filter(m => m.examId === examId);
     
@@ -254,6 +258,8 @@ export const PrincipalDashboard = () => {
     }).sort((a, b) => b.total - a.total);
     const overallPos = overallRankings.findIndex(r => r.id === student.id) + 1;
 
+    const studentClassStr = typeof student.class === 'string' ? student.class.trim() : (student.class?.name || '');
+
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.text(`Adm No : ${student.adm}`, margin + 5, detailsY + 7);
@@ -261,7 +267,7 @@ export const PrincipalDashboard = () => {
     doc.text(`Kpsea : `, margin + 140, detailsY + 7);
 
     doc.text(`UPI No : A23WERTYST`, margin + 5, detailsY + 14);
-    doc.text(`Grade : ${student.class} A 2026`, margin + 60, detailsY + 14);
+    doc.text(`Grade : ${studentClassStr} A 2026`, margin + 60, detailsY + 14);
     doc.text(`Term : 1`, margin + 140, detailsY + 14);
 
     doc.text(`House : `, margin + 5, detailsY + 21);
@@ -281,7 +287,8 @@ export const PrincipalDashboard = () => {
       }).sort((a, b) => b.score - a.score);
       const subRank = subjectRankings.findIndex(r => r.id === student.id) + 1;
 
-      const teacher = staff.find(t => t.assignedSubjects?.includes(subject) && t.assignedClasses?.includes(student.class))?.name.split(' ')[0] || 'N/A';
+      const studentClass = typeof student.class === 'string' ? student.class.trim() : (student.class?.name || '');
+      const teacher = staff.find(t => t.assignedSubjects?.includes(subject) && t.assignedClasses?.some(ac => ac.trim() === studentClass))?.name.split(' ')[0] || 'N/A';
 
       return [
         subject.toUpperCase(),
@@ -372,7 +379,10 @@ export const PrincipalDashboard = () => {
       return;
     }
 
-    const classStudents = students.filter(s => s.class === className);
+    const classStudents = students.filter(s => {
+      const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
+      return studentClass === className.trim();
+    });
     if (classStudents.length === 0) {
       alert('No students found in this class.');
       return;
@@ -1105,7 +1115,10 @@ export const PrincipalDashboard = () => {
   const getAnalyticsData = () => {
     // 1. Class Performance Comparison
     const classPerformance = classes.map(c => {
-      const classStudents = students.filter(s => s.class === c.name);
+      const classStudents = students.filter(s => {
+        const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
+        return studentClass === c.name.trim();
+      });
       const classMarks = marks.filter(m => classStudents.some(s => s.id === m.studentId));
       const totalScore = classMarks.reduce((sum, m) => sum + (m.total || 0), 0);
       const count = classMarks.length;
@@ -1197,7 +1210,10 @@ export const PrincipalDashboard = () => {
     if (!exam) return [];
 
     // 1. Get all students in the exam classes
-    const examStudents = students.filter(s => exam.classes.includes(s.class));
+    const examStudents = students.filter(s => {
+      const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
+      return exam.classes.some((c: string) => c.trim() === studentClass);
+    });
 
     // 2. Calculate scores for all students
     const studentAnalysis = examStudents.map(student => {
@@ -1238,14 +1254,21 @@ export const PrincipalDashboard = () => {
 
     // 4. Calculate CLS POS (Class Rank)
     const finalData = withOverallRank.map(student => {
-      const classStudents = withOverallRank.filter(s => s.class === student.class);
+      const studentClass = typeof student.class === 'string' ? student.class.trim() : (student.class?.name || '');
+      const classStudents = withOverallRank.filter(s => {
+        const sClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
+        return sClass === studentClass;
+      });
       const classRanked = classStudents.sort((a, b) => b.totalScore - a.totalScore);
       const clsPos = classRanked.findIndex(s => s.id === student.id) + 1;
       return { ...student, clsPos };
     });
 
     // 5. Filter by selected class if needed
-    const filtered = finalData.filter(s => selectedAnalysisClass === 'All' || s.class === selectedAnalysisClass);
+    const filtered = finalData.filter(s => {
+      const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
+      return selectedAnalysisClass === 'All' || studentClass === selectedAnalysisClass.trim();
+    });
 
     // 6. Apply custom sorting
     return filtered.sort((a, b) => {
@@ -1272,7 +1295,10 @@ export const PrincipalDashboard = () => {
 
     // Group marks by student
     const studentAnalysis = students
-      .filter(s => (selectedAnalysisClass === 'All' || s.class === selectedAnalysisClass))
+      .filter(s => {
+        const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
+        return selectedAnalysisClass === 'All' || studentClass === selectedAnalysisClass.trim();
+      })
       .map(student => {
         const studentMarks = examMarks.filter(m => m.studentId === student.id);
         const subjectScores: any = {};
@@ -1323,7 +1349,11 @@ export const PrincipalDashboard = () => {
       const subjectMarks = marks.filter(m => 
         m.examId === selectedProcessingExamId && 
         m.subject === subject &&
-        (selectedProcessingClass === 'All' || students.find(s => s.id === m.studentId)?.class === selectedProcessingClass)
+        (selectedProcessingClass === 'All' || (() => {
+          const s = students.find(st => st.id === m.studentId);
+          const sClass = typeof s?.class === 'string' ? s.class.trim() : (s?.class?.name || '');
+          return sClass === selectedProcessingClass.trim();
+        })())
       );
       
       const sorted = subjectMarks.sort((a, b) => parseFloat(b.total || b.score) - parseFloat(a.total || a.score));
@@ -1343,9 +1373,10 @@ export const PrincipalDashboard = () => {
     const exam = exams.find(e => e.id === selectedProcessingExamId);
     if (!exam) return [];
 
-    const classStudents = students.filter(s => 
-      (selectedProcessingClass === 'All' ? exam.classes.includes(s.class) : s.class === selectedProcessingClass)
-    );
+    const classStudents = students.filter(s => {
+      const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
+      return (selectedProcessingClass === 'All' ? exam.classes.some(c => c.trim() === studentClass) : studentClass === selectedProcessingClass.trim());
+    });
     
     const processed = classStudents.map(student => {
       const studentMarks = marks.filter(m => m.examId === selectedProcessingExamId && m.studentId === student.id);
@@ -1503,11 +1534,12 @@ export const PrincipalDashboard = () => {
       const mainSheetData = data.map(row => {
         const exportRow: any = {};
         
+        const studentClass = typeof row.class === 'string' ? row.class.trim() : (row.class?.name || '');
         if (isMeritList) {
           exportRow['ADMNO'] = row.adm;
           exportRow['FULL NAMES'] = row.name;
           exportRow['KPSEA'] = '';
-          exportRow['STR'] = row.class.substring(0, 1);
+          exportRow['STR'] = studentClass.substring(0, 1);
           learningAreas.forEach(la => {
             exportRow[la.substring(0, 4).toUpperCase()] = row.subjectScores[la] ?? '';
           });
@@ -1519,7 +1551,7 @@ export const PrincipalDashboard = () => {
           exportRow['Rank'] = row.rank;
           exportRow['Adm No'] = row.adm;
           exportRow['Student Name'] = row.name;
-          exportRow['Class'] = row.class;
+          exportRow['Class'] = studentClass;
           learningAreas.forEach(la => {
             exportRow[la] = row.subjectScores[la] ?? '--';
           });
@@ -2214,7 +2246,10 @@ export const PrincipalDashboard = () => {
                     <tbody className="divide-y divide-gray-100">
                       {classes.map((cls) => {
                         const teacher = staff.find(s => s.id === cls.teacherId);
-                        const enrolled = students.filter(s => s.class === cls.name).length;
+                        const enrolled = students.filter(s => {
+                          const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
+                          return studentClass === cls.name.trim();
+                        }).length;
                         return (
                           <tr key={cls.id} className="hover:bg-gray-50/50 transition-colors">
                             <td className="px-6 py-4 font-bold text-kenya-black">{cls.name}</td>
@@ -4194,7 +4229,11 @@ export const PrincipalDashboard = () => {
                   {/* Student Details Section */}
                   {(() => {
                     const student = students.find(s => s.id === reportConfig.selectedStudentId);
-                    const classStudents = students.filter(s => s.class === student?.class);
+                    const classStudents = students.filter(s => {
+                      const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
+                      const targetClass = typeof student?.class === 'string' ? student.class.trim() : (student?.class?.name || '');
+                      return studentClass === targetClass;
+                    });
                     const allStudents = students;
                     
                     // Calculate overall rank
@@ -4262,9 +4301,10 @@ export const PrincipalDashboard = () => {
                       <tbody>
                         {learningAreas.map(subject => {
                           const student = students.find(s => s.id === reportConfig.selectedStudentId);
+                          const studentClass = typeof student?.class === 'string' ? student.class.trim() : (student?.class?.name || '');
                           const subjectTeacher = staff.find(t => 
                             t.assignedSubjects?.includes(subject) && 
-                            t.assignedClasses?.includes(student?.class)
+                            t.assignedClasses?.some(ac => ac.trim() === studentClass)
                           );
 
                           const examId = reportConfig.selectedExamIds[0];
@@ -4274,7 +4314,10 @@ export const PrincipalDashboard = () => {
                           const grade = gradeObj ? gradeObj.grade : '--';
 
                           // Calculate subject rank
-                          const classStudents = students.filter(s => s.class === student?.class);
+                          const classStudents = students.filter(s => {
+                            const sClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
+                            return sClass === studentClass;
+                          });
                           const subjectRankings = classStudents.map(s => {
                             const sMark = marks.find(m => m.studentId === s.id && m.examId === examId && m.subject === subject);
                             return { id: s.id, score: sMark ? parseFloat(sMark.score) : 0 };
@@ -4367,13 +4410,17 @@ export const PrincipalDashboard = () => {
                         <tbody>
                           {(() => {
                             const student = students.find(s => s.id === reportConfig.selectedStudentId);
+                            const studentClass = typeof student?.class === 'string' ? student.class.trim() : (student?.class?.name || '');
                             const examId = reportConfig.selectedExamIds[0];
                             const studentMarks = marks.filter(m => m.studentId === student?.id && m.examId === examId);
                             const total = studentMarks.reduce((sum, m) => sum + parseFloat(m.score as string), 0);
                             const avg = studentMarks.length > 0 ? total / studentMarks.length : 0;
                             const gradeObj = gradingSystem.find(g => avg >= g.min && avg <= g.max);
                             
-                            const classStudents = students.filter(s => s.class === student?.class);
+                            const classStudents = students.filter(s => {
+                              const sClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
+                              return sClass === studentClass;
+                            });
                             const rankings = classStudents.map(s => {
                               const sMarks = marks.filter(m => m.examId === examId && m.studentId === s.id);
                               const t = sMarks.reduce((sum, m) => sum + parseFloat(m.score as string), 0);
