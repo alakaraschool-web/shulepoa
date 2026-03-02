@@ -24,9 +24,10 @@ export const TeacherLogin = () => {
 
     setTimeout(() => {
       const staff = JSON.parse(localStorage.getItem('alakara_staff') || '[]');
-      const teacher = staff.find((s: any) => s.username === username && s.password === password);
+      const cleanUsername = username.trim().toLowerCase();
+      const teacher = staff.find((s: any) => s.username?.toLowerCase() === cleanUsername && s.password === password);
 
-      if (teacher || ((username === 'teacher' || username === 'teacher@alakara.ac.ke') && password === 'teacher123')) {
+      if (teacher || ((cleanUsername === 'teacher' || cleanUsername === 'teacher@alakara.ac.ke') && password === 'teacher123')) {
         setIsLoading(false);
         const currentTeacher = teacher || { name: 'Teacher', role: 'Class Teacher', assignedClasses: ['Form 1', 'Grade 7'], username: 'teacher@alakara.ac.ke' };
         

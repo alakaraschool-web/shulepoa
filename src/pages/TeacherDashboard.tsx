@@ -353,6 +353,7 @@ export const TeacherDashboard = () => {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('alakara_current_teacher');
     navigate('/teacher-login');
   };
 
@@ -792,8 +793,8 @@ export const TeacherDashboard = () => {
           <div className="flex items-center gap-4">
             <NotificationBell role="teacher" userId={currentTeacher.id} />
             <div className="text-right">
-              <p className="text-sm font-bold text-kenya-black">Mr. Kamau</p>
-              <p className="text-xs text-gray-500">Mathematics Dept.</p>
+              <p className="text-sm font-bold text-kenya-black">{currentTeacher?.name || 'Teacher'}</p>
+              <p className="text-xs text-gray-500">{currentTeacher?.role || 'Staff'}</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-kenya-green/10 flex items-center justify-center overflow-hidden">
               {profilePhoto ? (
