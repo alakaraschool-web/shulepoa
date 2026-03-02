@@ -80,7 +80,7 @@ export const PrincipalDashboard = () => {
   const [daysToExpiry, setDaysToExpiry] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'staff' | 'students' | 'academic' | 'settings' | 'classes' | 'users'>('dashboard');
   const [managingClass, setManagingClass] = useState<any>(null);
-  const [academicSubTab, setAcademicSubTab] = useState<'overview' | 'create-exam' | 'learning-area' | 'grading' | 'analysis' | 'reports' | 'results-processing' | 'academic-settings' | 'merit-list'>('overview');
+  const [academicSubTab, setAcademicSubTab] = useState<'overview' | 'create-exam' | 'learning-area' | 'grading' | 'analysis' | 'reports' | 'results-processing' | 'academic-settings' | 'merit-list' | 'marks-entry'>('overview');
   const [topXCount, setTopXCount] = useState(10);
   const [selectedProcessingClass, setSelectedProcessingClass] = useState('All');
   const [selectedAnalysisClass, setSelectedAnalysisClass] = useState('All');
@@ -419,6 +419,9 @@ export const PrincipalDashboard = () => {
     return [
       { id: '1', name: 'Alice Wanjiku', adm: 'ADM-2024-001', class: 'Form 1', status: 'Active', gender: 'Female', profile_image: null },
       { id: '2', name: 'Bob Otieno', adm: 'ADM-2024-002', class: 'Form 2', status: 'Active', gender: 'Male', profile_image: null },
+      { id: '3', name: 'Charlie Musyoka', adm: 'ADM-2024-003', class: 'Form 1', status: 'Active', gender: 'Male', profile_image: null },
+      { id: '4', name: 'Diana Kwamboka', adm: 'ADM-2024-004', class: 'Grade 7', status: 'Active', gender: 'Female', profile_image: null },
+      { id: '5', name: 'Evans Kiprop', adm: 'ADM-2024-005', class: 'Grade 7', status: 'Active', gender: 'Male', profile_image: null },
     ];
   });
 
@@ -450,7 +453,13 @@ export const PrincipalDashboard = () => {
   const [marks, setMarks] = useState<any[]>(() => {
     const saved = localStorage.getItem('alakara_marks');
     if (saved) return JSON.parse(saved);
-    return [];
+    return [
+      { id: 'm1', examId: 'exam-1', studentId: '1', subject: 'Mathematics', score: '85', total: 85, grade: 'A', points: 12 },
+      { id: 'm2', examId: 'exam-1', studentId: '1', subject: 'English', score: '78', total: 78, grade: 'A-', points: 11 },
+      { id: 'm3', examId: 'exam-1', studentId: '3', subject: 'Mathematics', score: '92', total: 92, grade: 'A', points: 12 },
+      { id: 'm4', examId: 'exam-1', studentId: '3', subject: 'English', score: '65', total: 65, grade: 'B', points: 9 },
+      { id: 'm5', examId: 'exam-1', studentId: '4', subject: 'Mathematics', score: '70', total: 70, grade: 'B+', points: 10 },
+    ];
   });
   const [showEditMarksModal, setShowEditMarksModal] = useState(false);
   const [selectedMarksStudent, setSelectedMarksStudent] = useState<any>(null);
@@ -466,7 +475,18 @@ export const PrincipalDashboard = () => {
   const [exams, setExams] = useState<any[]>(() => {
     const saved = localStorage.getItem('alakara_exams');
     if (saved) return JSON.parse(saved);
-    return [];
+    return [
+      { 
+        id: 'exam-1', 
+        title: 'End of Term 1 Assessment', 
+        term: 'Term 1', 
+        year: '2026', 
+        classes: ['Form 1', 'Form 2', 'Grade 7'], 
+        subjects: ['Mathematics', 'English', 'Kiswahili', 'Science'],
+        status: 'Active',
+        createdAt: new Date().toISOString()
+      }
+    ];
   });
 
   const [newExam, setNewExam] = useState({
@@ -506,6 +526,7 @@ export const PrincipalDashboard = () => {
 
   const [reportConfig, setReportConfig] = useState({
     selectedStudentId: '',
+    selectedClass: 'All',
     selectedExamIds: [] as string[],
     includeAverages: true,
     includeGrades: true,
@@ -884,6 +905,42 @@ export const PrincipalDashboard = () => {
         alert(`Successfully imported ${newStudents.length - students.length} students!`);
       } catch (err) {
         alert('Error parsing Excel file. Please ensure it follows the format: Name, Admission No, Class');
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleClassBulkStudentUpload = (e: ChangeEvent<HTMLInputElement>, className: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+
+        const newStudents = [...students];
+        data.forEach((row, index) => {
+          if (index === 0) return; // Skip header
+          if (!row[0]) return; // Skip empty rows
+
+          newStudents.push({
+            id: Math.random().toString(36).substr(2, 9),
+            name: String(row[0]).trim(),
+            adm: String(row[1] || '').trim(),
+            class: className,
+            status: 'Active'
+          });
+        });
+
+        setStudents(newStudents);
+        alert(`Successfully imported ${newStudents.length - students.length} students to ${className}!`);
+      } catch (err) {
+        alert('Error parsing Excel file. Please ensure it follows the format: Name, Admission No');
       }
     };
     reader.readAsBinaryString(file);
@@ -2355,6 +2412,7 @@ export const PrincipalDashboard = () => {
                       { id: 'analysis', title: 'Analyse Results', desc: 'Deep dive into student performance data.', icon: BarChart3, color: 'text-kenya-red', bg: 'bg-kenya-red/10' },
                       { id: 'results-processing', title: 'Results Processing', desc: 'Subject champions and top performers.', icon: Trophy, color: 'text-yellow-600', bg: 'bg-yellow-50' },
                       { id: 'merit-list', title: 'Merit List', desc: 'Detailed spreadsheet-style performance list.', icon: ClipboardList, color: 'text-kenya-green', bg: 'bg-kenya-green/10' },
+                      { id: 'marks-entry', title: 'Marks Entry', desc: 'Directly enter and update student scores.', icon: Edit, color: 'text-blue-600', bg: 'bg-blue-50' },
                       { id: 'reports', title: 'Generate Report Cards', desc: 'Produce and distribute student reports.', icon: FileSpreadsheet, color: 'text-purple-600', bg: 'bg-purple-50' },
                       { id: 'academic-settings', title: 'Academic Settings', desc: 'Configure assessments and ranking logic.', icon: Settings, color: 'text-gray-600', bg: 'bg-gray-100' },
                     ].map((item) => (
@@ -2549,6 +2607,107 @@ export const PrincipalDashboard = () => {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                ) : academicSubTab === 'marks-entry' ? (
+                  <div className="space-y-8">
+                    <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                        <div>
+                          <h3 className="text-xl font-bold text-kenya-black">Direct Marks Entry</h3>
+                          <p className="text-sm text-gray-500">Select an exam and class to enter scores directly.</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4">
+                          <select 
+                            value={selectedAnalysisClass}
+                            onChange={(e) => setSelectedAnalysisClass(e.target.value)}
+                            className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold text-sm"
+                          >
+                            <option value="All">Select Class...</option>
+                            {classes.map(c => (
+                              <option key={c.id} value={c.name}>{c.name}</option>
+                            ))}
+                          </select>
+                          <select 
+                            value={selectedAnalysisExamId}
+                            onChange={(e) => setSelectedAnalysisExamId(e.target.value)}
+                            className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold text-sm"
+                          >
+                            <option value="">Select Examination...</option>
+                            {exams.map(e => (
+                              <option key={e.id} value={e.id}>{e.title} ({e.term} {e.year})</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {!selectedAnalysisExamId || selectedAnalysisClass === 'All' ? (
+                        <div className="text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+                          <Edit className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                          <p className="text-gray-400 font-medium italic">Please select both an examination and a class to enter marks.</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto border border-gray-100 rounded-xl">
+                          <table className="w-full text-left border-collapse min-w-[1000px]">
+                            <thead>
+                              <tr className="bg-gray-50 text-[10px] font-black text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                                <th className="px-4 py-3 border-r border-gray-200 sticky left-0 bg-gray-50 z-10">ADMNO</th>
+                                <th className="px-4 py-3 border-r border-gray-200 sticky left-[100px] bg-gray-50 z-10 min-w-[200px]">STUDENT NAME</th>
+                                {learningAreas.map(la => (
+                                  <th key={la} className="px-2 py-3 border-r border-gray-200 text-center min-w-[80px]">{la.substring(0, 4).toUpperCase()}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {students.filter(s => s.class === selectedAnalysisClass).map((student) => (
+                                <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+                                  <td className="px-4 py-3 border-r border-gray-100 sticky left-0 bg-white z-10 font-mono text-xs">{student.adm}</td>
+                                  <td className="px-4 py-3 border-r border-gray-100 sticky left-[100px] bg-white z-10 font-bold text-kenya-black uppercase">{student.name}</td>
+                                  {learningAreas.map(la => {
+                                    const currentMark = marks.find(m => m.studentId === student.id && m.examId === selectedAnalysisExamId && m.subject === la);
+                                    return (
+                                      <td key={la} className="px-2 py-2 border-r border-gray-100 text-center">
+                                        <input 
+                                          type="number"
+                                          min="0"
+                                          max="100"
+                                          value={currentMark ? currentMark.score : ''}
+                                          onChange={(e) => {
+                                            const score = e.target.value;
+                                            const newMarks = [...marks];
+                                            const markIdx = newMarks.findIndex(m => m.studentId === student.id && m.examId === selectedAnalysisExamId && m.subject === la);
+                                            
+                                            const markData = {
+                                              id: `${selectedAnalysisExamId}-${student.id}-${la}`,
+                                              examId: selectedAnalysisExamId,
+                                              studentId: student.id,
+                                              subject: la,
+                                              score: score,
+                                              total: parseFloat(score || '0'),
+                                              grade: 'C', // Simplified
+                                              points: 6, // Simplified
+                                              remarks: 'Good'
+                                            };
+
+                                            if (markIdx >= 0) {
+                                              newMarks[markIdx] = markData;
+                                            } else {
+                                              newMarks.push(markData);
+                                            }
+                                            setMarks(newMarks);
+                                          }}
+                                          className="w-16 px-2 py-1 text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold"
+                                          placeholder="-"
+                                        />
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : academicSubTab === 'merit-list' ? (
                   <div className="space-y-8">
@@ -4572,10 +4731,30 @@ export const PrincipalDashboard = () => {
               <div className="flex-1 overflow-y-auto pr-2 space-y-8">
                 {/* Add Student to this Class */}
                 <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
-                  <h4 className="font-bold text-kenya-black mb-4 flex items-center gap-2">
-                    <UserPlus className="w-4 h-4 text-kenya-green" />
-                    Add Student to {managingClass.name}
-                  </h4>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-bold text-kenya-black flex items-center gap-2">
+                      <UserPlus className="w-4 h-4 text-kenya-green" />
+                      Add Student to {managingClass.name}
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="file" 
+                        id="class-bulk-student-upload" 
+                        className="hidden" 
+                        accept=".xlsx, .xls, .csv"
+                        onChange={(e) => handleClassBulkStudentUpload(e, managingClass.name)}
+                      />
+                      <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={() => document.getElementById('class-bulk-student-upload')?.click()}
+                        className="gap-2"
+                      >
+                        <Upload className="w-4 h-4" />
+                        Bulk Import to {managingClass.name}
+                      </Button>
+                    </div>
+                  </div>
                   <div className="flex gap-4">
                     <div className="flex-1 relative">
                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
