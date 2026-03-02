@@ -4,7 +4,6 @@ import { GraduationCap, Lock, User, ArrowLeft, BookOpen } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { PasswordResetModal } from '../components/PasswordResetModal';
-import { supabase } from '../lib/supabase';
 
 export const TeacherLogin = () => {
   const [username, setUsername] = useState('');
@@ -23,55 +22,12 @@ export const TeacherLogin = () => {
     setIsLoading(true);
     setError('');
 
-    try {
-      const cleanUsername = username.trim().toLowerCase();
-
-      // 1. Try authenticating with Supabase Auth first
-      // We only attempt this if it looks like an email address
-      let authError = null;
-      const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_URL !== 'your-supabase-url';
-
-      if (isSupabaseConfigured && cleanUsername.includes('@')) {
-        try {
-          const { data: authData, error } = await supabase.auth.signInWithPassword({
-            email: cleanUsername,
-            password: password,
-          });
-          
-          authError = error;
-
-          if (authData?.user) {
-            // Fetch profile to get name and role
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', authData.user.id)
-              .single();
-
-            const currentTeacher = {
-              id: authData.user.id,
-              name: profile?.name || authData.user.email?.split('@')[0] || 'Teacher',
-              role: profile?.role || 'Teacher',
-              email: authData.user.email,
-              username: authData.user.email,
-              assignedClasses: [], // In a full app, fetch from assignments table
-              avatar_url: profile?.avatar_url
-            };
-
-            localStorage.setItem('alakara_current_teacher', JSON.stringify(currentTeacher));
-            navigate('/teacher/dashboard');
-            return;
-          }
-        } catch (e) {
-          console.warn("Supabase auth failed, falling back to local storage", e);
-        }
-      }
-
-      // 2. Fallback to local storage (for teachers created in the prototype Principal Dashboard)
+    setTimeout(() => {
       const staff = JSON.parse(localStorage.getItem('alakara_staff') || '[]');
-      const teacher = staff.find((s: any) => s.username?.toLowerCase() === cleanUsername && s.password === password);
+      const teacher = staff.find((s: any) => s.username === username && s.password === password);
 
-      if (teacher || ((cleanUsername === 'teacher' || cleanUsername === 'teacher@alakara.ac.ke') && password === 'teacher123')) {
+      if (teacher || ((username === 'teacher' || username === 'teacher@alakara.ac.ke') && password === 'teacher123')) {
+        setIsLoading(false);
         const currentTeacher = teacher || { name: 'Teacher', role: 'Class Teacher', assignedClasses: ['Form 1', 'Grade 7'], username: 'teacher@alakara.ac.ke' };
         
         if (currentTeacher.mustChangePassword) {
@@ -82,16 +38,10 @@ export const TeacherLogin = () => {
           navigate('/teacher/dashboard');
         }
       } else {
-        // If authError is a network error (like Failed to fetch), just show generic invalid credentials
-        const isNetworkError = authError?.message?.toLowerCase().includes('fetch');
-        setError(!isNetworkError && authError?.message ? authError.message : 'Invalid teacher credentials');
+        setError('Invalid teacher credentials');
+        setIsLoading(false);
       }
-    } catch (err: any) {
-      console.error('Login error:', err);
-      setError(err.message || 'An error occurred during login');
-    } finally {
-      setIsLoading(false);
-    }
+    }, 1000);
   };
 
   const handlePasswordChange = (e: React.FormEvent) => {
