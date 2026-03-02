@@ -4,6 +4,7 @@ import { GraduationCap, Lock, User, ArrowLeft, BookOpen } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { PasswordResetModal } from '../components/PasswordResetModal';
+import { supabase } from '../lib/supabase';
 
 export const TeacherLogin = () => {
   const [username, setUsername] = useState('');
@@ -22,13 +23,49 @@ export const TeacherLogin = () => {
     setIsLoading(true);
     setError('');
 
-    setTimeout(() => {
-      const staff = JSON.parse(localStorage.getItem('alakara_staff') || '[]');
+    try {
       const cleanUsername = username.trim().toLowerCase();
+
+      // 1. Try authenticating with Supabase Auth first
+      // We only attempt this if it looks like an email address
+      let authError = null;
+      if (cleanUsername.includes('@')) {
+        const { data: authData, error } = await supabase.auth.signInWithPassword({
+          email: cleanUsername,
+          password: password,
+        });
+        
+        authError = error;
+
+        if (authData?.user) {
+          // Fetch profile to get name and role
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authData.user.id)
+            .single();
+
+          const currentTeacher = {
+            id: authData.user.id,
+            name: profile?.name || authData.user.email?.split('@')[0] || 'Teacher',
+            role: profile?.role || 'Teacher',
+            email: authData.user.email,
+            username: authData.user.email,
+            assignedClasses: [], // In a full app, fetch from assignments table
+            avatar_url: profile?.avatar_url
+          };
+
+          localStorage.setItem('alakara_current_teacher', JSON.stringify(currentTeacher));
+          navigate('/teacher/dashboard');
+          return;
+        }
+      }
+
+      // 2. Fallback to local storage (for teachers created in the prototype Principal Dashboard)
+      const staff = JSON.parse(localStorage.getItem('alakara_staff') || '[]');
       const teacher = staff.find((s: any) => s.username?.toLowerCase() === cleanUsername && s.password === password);
 
       if (teacher || ((cleanUsername === 'teacher' || cleanUsername === 'teacher@alakara.ac.ke') && password === 'teacher123')) {
-        setIsLoading(false);
         const currentTeacher = teacher || { name: 'Teacher', role: 'Class Teacher', assignedClasses: ['Form 1', 'Grade 7'], username: 'teacher@alakara.ac.ke' };
         
         if (currentTeacher.mustChangePassword) {
@@ -39,10 +76,14 @@ export const TeacherLogin = () => {
           navigate('/teacher/dashboard');
         }
       } else {
-        setError('Invalid teacher credentials');
-        setIsLoading(false);
+        setError(authError?.message || 'Invalid teacher credentials');
       }
-    }, 1000);
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.message || 'An error occurred during login');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handlePasswordChange = (e: React.FormEvent) => {
