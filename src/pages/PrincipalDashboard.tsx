@@ -86,6 +86,9 @@ export const PrincipalDashboard = () => {
   const [selectedAnalysisClass, setSelectedAnalysisClass] = useState('All');
   const [selectedProcessingExamId, setSelectedProcessingExamId] = useState('');
   
+  const [pendingMarks, setPendingMarks] = useState<{ [key: string]: string }>({});
+  const [stagedMarks, setStagedMarks] = useState<any[] | null>(null);
+
   const handleBulkMarksUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -124,46 +127,198 @@ export const PrincipalDashboard = () => {
         
         if (student) {
           Object.entries(subjectIndices).forEach(([subject, idx]) => {
-            const score = row[idx];
-            if (score !== undefined && score !== '') {
-              // Remove existing mark for this student/exam/subject
-              const markIdx = newMarks.findIndex(m => m.studentId === student.id && m.examId === examId && m.subject === subject);
-              const markData = {
-                id: Math.random().toString(36).substr(2, 9),
-                examId,
-                studentId: student.id,
-                score: String(score),
-                subject,
-                updatedAt: new Date().toISOString()
-              };
-              
-              if (markIdx > -1) {
-                newMarks[markIdx] = markData;
-              } else {
-                newMarks.push(markData);
-              }
+            let score = parseFloat(String(row[idx]));
+            if (isNaN(score)) return;
+            
+            // Validation: No subject should have more than 100 percent
+            if (score > 100) score = 100;
+            if (score < 0) score = 0;
+
+            const scoreStr = String(score);
+            
+            // Remove existing mark for this student/exam/subject
+            const markIdx = newMarks.findIndex(m => m.studentId === student.id && m.examId === examId && m.subject === subject);
+            const markData = {
+              id: Math.random().toString(36).substr(2, 9),
+              examId,
+              studentId: student.id,
+              score: scoreStr,
+              subject,
+              updatedAt: new Date().toISOString()
+            };
+            
+            if (markIdx > -1) {
+              newMarks[markIdx] = markData;
+            } else {
+              newMarks.push(markData);
             }
           });
         }
       });
 
-      setMarks(newMarks);
-      alert('Bulk marks imported successfully!');
+      setStagedMarks(newMarks);
+      alert('Bulk marks processed. Please click "Save Changes" to finalize.');
     };
     reader.readAsBinaryString(file);
   };
 
+  const saveStagedMarks = () => {
+    if (stagedMarks) {
+      setMarks(stagedMarks);
+      setStagedMarks(null);
+      alert('Bulk marks saved successfully!');
+    }
+  };
+
+  const savePendingMarks = () => {
+    const newMarks = [...marks];
+    (Object.entries(pendingMarks) as [string, string][]).forEach(([key, score]) => {
+      const [examId, studentId, subject] = key.split('|');
+      const markIdx = newMarks.findIndex(m => m.studentId === studentId && m.examId === examId && m.subject === subject);
+      
+      const markData = {
+        id: `${examId}-${studentId}-${subject}`,
+        examId,
+        studentId,
+        subject,
+        score: score,
+        total: parseFloat(score || '0'),
+        grade: 'C', // Simplified
+        points: 6, // Simplified
+        remarks: 'Good'
+      };
+
+      if (markIdx >= 0) {
+        newMarks[markIdx] = markData;
+      } else {
+        newMarks.push(markData);
+      }
+    });
+    setMarks(newMarks);
+    setPendingMarks({});
+    alert('Marks saved successfully!');
+  };
+
+  const printRawMarks = () => {
+    if (!selectedProcessingExamId) {
+      alert('Please select an examination first.');
+      return;
+    }
+    const exam = exams.find(e => e.id === selectedProcessingExamId);
+    const doc = new jsPDF('l', 'mm', 'a4');
+    
+    doc.setFontSize(18);
+    doc.text(schoolSettings.name.toUpperCase(), 148.5, 20, { align: 'center' });
+    doc.setFontSize(14);
+    doc.text(`RAW MARKS LIST: ${exam?.title} (${exam?.term} ${exam?.year})`, 148.5, 30, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(`Class: ${selectedProcessingClass}`, 148.5, 38, { align: 'center' });
+
+    const header = ['ADM', 'NAME', ...learningAreas.map(la => la.substring(0, 3).toUpperCase())];
+    const body = students
+      .filter(s => selectedProcessingClass === 'All' || s.class === selectedProcessingClass)
+      .map(s => {
+        const studentMarks = marks.filter(m => m.studentId === s.id && m.examId === selectedProcessingExamId);
+        return [
+          s.adm,
+          s.name.toUpperCase(),
+          ...learningAreas.map(la => {
+            const m = studentMarks.find(mark => mark.subject === la);
+            return m ? (m.score || m.total || '-') : '-';
+          })
+        ];
+      });
+
+    autoTable(doc, {
+      head: [header],
+      body: body,
+      startY: 45,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255] }
+    });
+
+    doc.save(`Raw_Marks_${selectedProcessingClass}_${exam?.title}.pdf`);
+  };
+
+  const publishAnalysedResults = () => {
+    if (!selectedProcessingExamId) {
+      alert('Please select an examination first.');
+      return;
+    }
+    const exam = exams.find(e => e.id === selectedProcessingExamId);
+    
+    addNotification({
+      title: 'Results Published',
+      message: `Analysed results for ${exam?.title} have been published to parents and students portals.`,
+      type: 'success',
+      role: 'principal',
+      userId: 'admin'
+    });
+    
+    alert(`Results for ${exam?.title} have been published successfully!`);
+  };
+
+  const downloadSubjectChampionsPDF = (subject: string) => {
+    const exam = exams.find(e => e.id === selectedProcessingExamId);
+    const doc = new jsPDF();
+    
+    doc.setFontSize(18);
+    doc.text(schoolSettings.name.toUpperCase(), 105, 20, { align: 'center' });
+    doc.setFontSize(14);
+    doc.text(`SUBJECT CHAMPIONS: ${subject.toUpperCase()}`, 105, 30, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(`Examination: ${exam?.title} (${exam?.term} ${exam?.year})`, 105, 38, { align: 'center' });
+
+    const subjectMarks = marks.filter(m => 
+      m.examId === selectedProcessingExamId && 
+      m.subject === subject &&
+      (selectedProcessingClass === 'All' || students.find(s => s.id === m.studentId)?.class === selectedProcessingClass)
+    );
+    
+    const sorted = subjectMarks.sort((a, b) => parseFloat(b.total || b.score) - parseFloat(a.total || a.score));
+    const body = sorted.map((m, idx) => {
+      const student = students.find(s => s.id === m.studentId);
+      return [
+        idx + 1,
+        student?.adm || '-',
+        student?.name.toUpperCase() || '-',
+        student?.class || '-',
+        `${m.total || m.score}%`
+      ];
+    });
+
+    autoTable(doc, {
+      head: [['RANK', 'ADM', 'STUDENT NAME', 'CLASS', 'SCORE']],
+      body: body,
+      startY: 45,
+      theme: 'striped',
+      headStyles: { fillColor: [0, 128, 0] }
+    });
+
+    doc.save(`${subject}_Champions_${exam?.title}.pdf`);
+  };
+
   const downloadBulkMarksTemplate = () => {
-    const header = ['Admission Number', ...learningAreas];
+    const header = ['Admission Number', 'Student Name', ...learningAreas];
+    const classStudents = selectedProcessingClass === 'All' 
+      ? students 
+      : students.filter(s => s.class === selectedProcessingClass);
+    
     const data = [
       header,
-      ['ADM-2024-001', ...learningAreas.map(() => '80')],
-      ['ADM-2024-002', ...learningAreas.map(() => '75')]
+      ...classStudents.map(s => [s.adm, s.name, ...learningAreas.map(() => '')])
     ];
+    
+    // If no students, add a sample row
+    if (classStudents.length === 0) {
+      data.push(['ADM-001', 'Sample Student', ...learningAreas.map(() => '')]);
+    }
+
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Marks");
-    XLSX.writeFile(wb, "Bulk_Marks_Upload_Template.xlsx");
+    XLSX.writeFile(wb, `Bulk_Marks_${selectedProcessingClass}_Template.xlsx`);
   };
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
@@ -449,6 +604,7 @@ export const PrincipalDashboard = () => {
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [studentSortBy, setStudentSortBy] = useState<'name' | 'adm'>('name');
   const [studentSortOrder, setStudentSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [viewingSubjectChampions, setViewingSubjectChampions] = useState<string | null>(null);
   const [selectedClassFilter, setSelectedClassFilter] = useState('All');
   const [marks, setMarks] = useState<any[]>(() => {
     const saved = localStorage.getItem('alakara_marks');
@@ -981,16 +1137,26 @@ export const PrincipalDashboard = () => {
     }
   };
 
-  const downloadStudentTemplate = () => {
+  const downloadStudentTemplate = (className?: string) => {
+    const header = ['Full Name', 'Admission Number', 'Class'];
+    const classStudents = className 
+      ? students.filter(s => s.class === className)
+      : [];
+    
     const data = [
-      ['Full Name', 'Admission Number', 'Class'],
-      ['Jane Doe', 'ADM-2024-001', 'Form 1'],
-      ['John Smith', 'ADM-2024-002', 'Form 2']
+      header,
+      ...classStudents.map(s => [s.name, s.adm, s.class])
     ];
+
+    if (data.length === 1) {
+      data.push(['Jane Doe', 'ADM-2024-001', className || 'Form 1']);
+      data.push(['John Smith', 'ADM-2024-002', className || 'Form 2']);
+    }
+
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Students");
-    XLSX.writeFile(wb, "Student_Bulk_Upload_Template.xlsx");
+    XLSX.writeFile(wb, className ? `Students_${className}_Template.xlsx` : "Student_Bulk_Upload_Template.xlsx");
   };
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -2146,7 +2312,7 @@ export const PrincipalDashboard = () => {
                     </Button>
                     <Button 
                       variant="ghost" 
-                      onClick={downloadStudentTemplate}
+                      onClick={() => downloadStudentTemplate()}
                       className="gap-2"
                     >
                       <Download className="w-4 h-4" />
@@ -2647,6 +2813,12 @@ export const PrincipalDashboard = () => {
                           <p className="text-sm text-gray-500">Select an exam and class to enter scores directly.</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-4">
+                          {Object.keys(pendingMarks).length > 0 && (
+                            <Button onClick={savePendingMarks} className="gap-2 shadow-lg shadow-kenya-green/20">
+                              <Save className="w-4 h-4" />
+                              Save Changes ({Object.keys(pendingMarks).length})
+                            </Button>
+                          )}
                           <select 
                             value={selectedAnalysisClass}
                             onChange={(e) => setSelectedAnalysisClass(e.target.value)}
@@ -2693,37 +2865,26 @@ export const PrincipalDashboard = () => {
                                   <td className="px-4 py-3 border-r border-gray-100 sticky left-0 bg-white z-10 font-mono text-xs">{student.adm}</td>
                                   <td className="px-4 py-3 border-r border-gray-100 sticky left-[100px] bg-white z-10 font-bold text-kenya-black uppercase">{student.name}</td>
                                   {learningAreas.map(la => {
-                                    const currentMark = marks.find(m => m.studentId === student.id && m.examId === selectedAnalysisExamId && m.subject === la);
+                                    const key = `${selectedAnalysisExamId}|${student.id}|${la}`;
+                                    const currentMark = pendingMarks[key] !== undefined 
+                                      ? pendingMarks[key] 
+                                      : marks.find(m => m.studentId === student.id && m.examId === selectedAnalysisExamId && m.subject === la)?.score || '';
+                                    
                                     return (
                                       <td key={la} className="px-2 py-2 border-r border-gray-100 text-center">
                                         <input 
                                           type="number"
                                           min="0"
                                           max="100"
-                                          value={currentMark ? currentMark.score : ''}
+                                          value={currentMark}
                                           onChange={(e) => {
-                                            const score = e.target.value;
-                                            const newMarks = [...marks];
-                                            const markIdx = newMarks.findIndex(m => m.studentId === student.id && m.examId === selectedAnalysisExamId && m.subject === la);
-                                            
-                                            const markData = {
-                                              id: `${selectedAnalysisExamId}-${student.id}-${la}`,
-                                              examId: selectedAnalysisExamId,
-                                              studentId: student.id,
-                                              subject: la,
-                                              score: score,
-                                              total: parseFloat(score || '0'),
-                                              grade: 'C', // Simplified
-                                              points: 6, // Simplified
-                                              remarks: 'Good'
-                                            };
-
-                                            if (markIdx >= 0) {
-                                              newMarks[markIdx] = markData;
-                                            } else {
-                                              newMarks.push(markData);
-                                            }
-                                            setMarks(newMarks);
+                                            let val = e.target.value;
+                                            if (parseFloat(val) > 100) val = '100';
+                                            if (parseFloat(val) < 0) val = '0';
+                                            setPendingMarks({
+                                              ...pendingMarks,
+                                              [key]: val
+                                            });
                                           }}
                                           className="w-16 px-2 py-1 text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold"
                                           placeholder="-"
@@ -3344,6 +3505,14 @@ export const PrincipalDashboard = () => {
                           <p className="text-sm text-gray-500">Manage bulk uploads and identify top performers.</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-4">
+                          <Button onClick={printRawMarks} variant="outline" size="sm" className="gap-2">
+                            <Printer className="w-4 h-4" />
+                            Print Raw Marks
+                          </Button>
+                          <Button onClick={publishAnalysedResults} variant="secondary" size="sm" className="gap-2">
+                            <Globe className="w-4 h-4" />
+                            Publish Results
+                          </Button>
                           <select 
                             value={selectedProcessingClass}
                             onChange={(e) => setSelectedProcessingClass(e.target.value)}
@@ -3366,6 +3535,12 @@ export const PrincipalDashboard = () => {
                           </select>
                           
                           <div className="flex items-center gap-2">
+                            {stagedMarks && (
+                              <Button onClick={saveStagedMarks} className="gap-2 shadow-lg shadow-kenya-green/20">
+                                <Save className="w-4 h-4" />
+                                Save Uploaded Marks
+                              </Button>
+                            )}
                             <Button onClick={downloadBulkMarksTemplate} variant="ghost" size="sm" className="gap-2">
                               <Download className="w-4 h-4" />
                               Template
@@ -3404,6 +3579,14 @@ export const PrincipalDashboard = () => {
                                     <div>
                                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{item.subject}</p>
                                       <p className="font-bold text-kenya-black">{item.champion ? item.champion.studentName : 'No data'}</p>
+                                      {item.champion && (
+                                        <button 
+                                          onClick={() => setViewingSubjectChampions(item.subject)}
+                                          className="text-[10px] font-bold text-kenya-green hover:underline mt-1"
+                                        >
+                                          View All Champions
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                   {item.champion && (
@@ -4836,6 +5019,15 @@ export const PrincipalDashboard = () => {
                       <Button 
                         variant="secondary" 
                         size="sm"
+                        onClick={() => downloadStudentTemplate(managingClass.name)}
+                        className="gap-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        Template
+                      </Button>
+                      <Button 
+                        variant="secondary" 
+                        size="sm"
                         onClick={() => document.getElementById('class-bulk-student-upload')?.click()}
                         className="gap-2"
                       >
@@ -4916,6 +5108,85 @@ export const PrincipalDashboard = () => {
                     </table>
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+        {/* Subject Champions Modal */}
+        {viewingSubjectChampions && (
+          <div className="fixed inset-0 bg-kenya-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+                <div>
+                  <h3 className="text-xl font-black text-kenya-black uppercase tracking-widest">{viewingSubjectChampions} Champions</h3>
+                  <p className="text-xs text-gray-500 font-bold uppercase">Top Performers in {viewingSubjectChampions}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="gap-2"
+                    onClick={() => downloadSubjectChampionsPDF(viewingSubjectChampions)}
+                  >
+                    <Download className="w-4 h-4" />
+                    Download PDF
+                  </Button>
+                  <button 
+                    onClick={() => setViewingSubjectChampions(null)}
+                    className="p-2 hover:bg-white rounded-xl transition-colors text-gray-400 hover:text-kenya-red"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-6 max-h-[60vh] overflow-y-auto">
+                <table className="w-full text-left">
+                  <thead className="text-[10px] font-black text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                    <tr>
+                      <th className="px-4 py-3">Rank</th>
+                      <th className="px-4 py-3">Student</th>
+                      <th className="px-4 py-3">Class</th>
+                      <th className="px-4 py-3 text-right">Score</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {marks
+                      .filter(m => 
+                        m.examId === selectedProcessingExamId && 
+                        m.subject === viewingSubjectChampions &&
+                        (selectedProcessingClass === 'All' || students.find(s => s.id === m.studentId)?.class === selectedProcessingClass)
+                      )
+                      .sort((a, b) => parseFloat(b.total || b.score) - parseFloat(a.total || a.score))
+                      .map((m, idx) => {
+                        const student = students.find(s => s.id === m.studentId);
+                        return (
+                          <tr key={m.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-4">
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
+                                idx === 0 ? 'bg-yellow-100 text-yellow-700' : 
+                                idx === 1 ? 'bg-gray-100 text-gray-600' :
+                                idx === 2 ? 'bg-orange-100 text-orange-700' : 'text-gray-400'
+                              }`}>
+                                {idx + 1}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4">
+                              <p className="font-bold text-kenya-black">{student?.name}</p>
+                              <p className="text-[10px] text-gray-400 font-mono">{student?.adm}</p>
+                            </td>
+                            <td className="px-4 py-4 text-sm text-gray-500">{student?.class}</td>
+                            <td className="px-4 py-4 text-right">
+                              <span className="font-black text-kenya-green">{m.total || m.score}%</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
               </div>
             </motion.div>
           </div>
