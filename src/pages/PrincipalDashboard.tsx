@@ -1128,8 +1128,27 @@ export const PrincipalDashboard = () => {
     setLearningAreas([...learningAreas, name.trim()]);
   };
 
+  const editLearningArea = (oldName: string, newName: string) => {
+    const trimmedNewName = newName.trim();
+    if (!trimmedNewName || oldName === trimmedNewName) return;
+    if (learningAreas.includes(trimmedNewName)) {
+      alert('This learning area already exists.');
+      return;
+    }
+    setLearningAreas(learningAreas.map(la => la === oldName ? trimmedNewName : la));
+    
+    // Update marks
+    setMarks(marks.map(m => m.subject === oldName ? { ...m, subject: trimmedNewName } : m));
+    
+    // Update exams
+    setExams(exams.map(e => ({
+      ...e,
+      subjects: e.subjects?.map((s: string) => s === oldName ? trimmedNewName : s)
+    })));
+  };
+
   const removeLearningArea = (name: string) => {
-    if (window.confirm(`Remove ${name}?`)) {
+    if (window.confirm(`Remove ${name}? All associated marks will be hidden.`)) {
       setLearningAreas(learningAreas.filter(la => la !== name));
     }
   };
@@ -2527,12 +2546,23 @@ export const PrincipalDashboard = () => {
                         {learningAreas.map((la) => (
                           <div key={la} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 group">
                             <span className="font-bold text-kenya-black">{la}</span>
-                            <button 
-                              onClick={() => removeLearningArea(la)}
-                              className="p-2 text-gray-400 hover:text-kenya-red opacity-0 group-hover:opacity-100 transition-all"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                              <button 
+                                onClick={() => {
+                                  const newName = prompt(`Edit ${la}:`, la);
+                                  if (newName) editLearningArea(la, newName);
+                                }}
+                                className="p-2 text-gray-400 hover:text-blue-600"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => removeLearningArea(la)}
+                                className="p-2 text-gray-400 hover:text-kenya-red"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -3829,7 +3859,7 @@ export const PrincipalDashboard = () => {
                     </div>
                   </div>
 
-                  {/* Right Column: Logo Upload */}
+                  {/* Right Column: Logo Upload & Subjects */}
                   <div className="space-y-8">
                     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 text-center">
                       <h3 className="text-lg font-bold text-kenya-black mb-6">School Seal / Logo</h3>
@@ -3850,6 +3880,65 @@ export const PrincipalDashboard = () => {
                         </label>
                       </div>
                       <p className="text-xs text-gray-500 px-4">Recommended: Square PNG with transparent background (min 500x500px)</p>
+                    </div>
+
+                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+                      <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-bold text-kenya-black">Subject Management</h3>
+                        <Library className="w-5 h-5 text-kenya-green" />
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div className="flex gap-2">
+                          <input 
+                            type="text" 
+                            id="settings-la-input"
+                            placeholder="New subject..."
+                            className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none text-sm"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                addLearningArea((e.target as HTMLInputElement).value);
+                                (e.target as HTMLInputElement).value = '';
+                              }
+                            }}
+                          />
+                          <Button 
+                            size="sm"
+                            onClick={() => {
+                              const input = document.getElementById('settings-la-input') as HTMLInputElement;
+                              addLearningArea(input.value);
+                              input.value = '';
+                            }}
+                          >
+                            Add
+                          </Button>
+                        </div>
+
+                        <div className="max-h-[300px] overflow-y-auto pr-2 space-y-2">
+                          {learningAreas.map((la) => (
+                            <div key={la} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100 group">
+                              <span className="text-sm font-bold text-kenya-black">{la}</span>
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                <button 
+                                  onClick={() => {
+                                    const newName = prompt(`Edit ${la}:`, la);
+                                    if (newName) editLearningArea(la, newName);
+                                  }}
+                                  className="p-1 text-gray-400 hover:text-blue-600"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                  onClick={() => removeLearningArea(la)}
+                                  className="p-1 text-gray-400 hover:text-kenya-red"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="pt-6">
