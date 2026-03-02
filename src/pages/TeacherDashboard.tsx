@@ -26,6 +26,7 @@ import {
   UserPlus,
   Trash2,
   X,
+  Menu,
   Edit3,
   Printer,
   Library
@@ -65,7 +66,8 @@ export const TeacherDashboard = () => {
         year: '2026', 
         classes: ['Form 1', 'Form 2', 'Form 3', 'Form 4'], 
         subjects: ['Mathematics', 'English', 'Science'],
-        status: 'Active' 
+        status: 'Active',
+        published: false
       },
       { 
         id: 'e2', 
@@ -74,11 +76,13 @@ export const TeacherDashboard = () => {
         year: '2026', 
         classes: ['Form 1', 'Grade 7'], 
         subjects: ['Mathematics', 'Science'],
-        status: 'Active' 
+        status: 'Active',
+        published: false
       }
     ];
   });
   const [activeExam, setActiveExam] = useState<any>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [marks, setMarks] = useState<any[]>(() => {
     const saved = localStorage.getItem('alakara_marks');
     return saved ? JSON.parse(saved) : [];
@@ -191,9 +195,7 @@ export const TeacherDashboard = () => {
   const [assessmentCategories] = useState<any[]>(() => {
     const saved = localStorage.getItem('alakara_assessment_categories');
     return saved ? JSON.parse(saved) : [
-      { id: 'cat1', name: 'CAT 1', maxScore: 20 },
-      { id: 'cat2', name: 'CAT 2', maxScore: 20 },
-      { id: 'final', name: 'Final Exam', maxScore: 60 },
+      { id: 'final', name: 'Score', maxScore: 100 },
     ];
   });
 
@@ -617,7 +619,7 @@ export const TeacherDashboard = () => {
     
     const examMarks = marks.filter(m => m.examId === selectedAnalysisExamId);
     const exam = exams.find(e => e.id === selectedAnalysisExamId);
-    if (!exam) return [];
+    if (!exam || !exam.published) return [];
 
     // Group marks by student - Filtered by assigned classes
     const studentAnalysis = allStudents
@@ -666,6 +668,9 @@ export const TeacherDashboard = () => {
   const getSubjectRanking = () => {
     if (!selectedAnalysisExamId || !selectedRankingSubject) return [];
     
+    const exam = exams.find(e => e.id === selectedAnalysisExamId);
+    if (!exam || !exam.published) return [];
+
     const examMarks = marks.filter(m => m.examId === selectedAnalysisExamId && m.subject === selectedRankingSubject);
     
     const ranked = examMarks
@@ -686,34 +691,53 @@ export const TeacherDashboard = () => {
   const subjectRanking = getSubjectRanking();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex font-sans">
+    <div className="min-h-screen bg-gray-50 flex font-sans relative">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-72 bg-kenya-black text-white flex flex-col shrink-0">
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-72 bg-kenya-black text-white flex flex-col shrink-0 transition-transform duration-300 lg:relative lg:translate-x-0
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
         <div className="p-8">
-          <div className="flex items-center gap-3 mb-12 group cursor-pointer" onClick={() => navigate('/')}>
-            <div className="bg-kenya-green p-2 rounded-lg group-hover:rotate-12 transition-transform">
-              <GraduationCap className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-between mb-12">
+            <div className="flex items-center gap-3 group cursor-pointer" onClick={() => navigate('/')}>
+              <div className="bg-kenya-green p-2 rounded-lg group-hover:rotate-12 transition-transform">
+                <GraduationCap className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-xl font-bold tracking-tight">Alakara <span className="text-kenya-red">Staff</span></span>
             </div>
-            <span className="text-xl font-bold tracking-tight">Alakara <span className="text-kenya-red">Staff</span></span>
+            <button 
+              className="lg:hidden text-gray-400 hover:text-white"
+              onClick={() => setIsSidebarOpen(false)}
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
 
           <nav className="space-y-2">
             <button 
-              onClick={() => { setActiveTab('exams'); setActiveExam(null); }}
+              onClick={() => { setActiveTab('exams'); setActiveExam(null); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'exams' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
             >
               <BookOpen className="w-5 h-5" />
               Examinations
             </button>
             <button 
-              onClick={() => { setActiveTab('analysis'); setActiveExam(null); }}
+              onClick={() => { setActiveTab('analysis'); setActiveExam(null); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'analysis' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
             >
               <BarChart3 className="w-5 h-5" />
               Exam Analysis
             </button>
             <button 
-              onClick={() => { setActiveTab('materials'); setActiveExam(null); }}
+              onClick={() => { setActiveTab('materials'); setActiveExam(null); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'materials' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
             >
               <FileText className="w-5 h-5" />
@@ -721,7 +745,7 @@ export const TeacherDashboard = () => {
             </button>
             {teacherRole === 'Class Teacher' && (
               <button 
-                onClick={() => { setActiveTab('class-management'); setActiveExam(null); }}
+                onClick={() => { setActiveTab('class-management'); setActiveExam(null); setIsSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'class-management' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
               >
                 <Users className="w-5 h-5" />
@@ -729,7 +753,7 @@ export const TeacherDashboard = () => {
               </button>
             )}
             <button 
-              onClick={() => setActiveTab('profile')}
+              onClick={() => { setActiveTab('profile'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'profile' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
             >
               <LayoutDashboard className="w-5 h-5" />
@@ -752,9 +776,15 @@ export const TeacherDashboard = () => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0">
+        <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-8 shrink-0">
           <div className="flex items-center gap-4">
-            <h2 className="font-bold text-kenya-black text-lg">
+            <button 
+              className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={() => setIsSidebarOpen(true)}
+            >
+              <Menu className="w-6 h-6 text-kenya-black" />
+            </button>
+            <h2 className="font-bold text-kenya-black text-lg truncate max-w-[150px] sm:max-w-none">
               {activeExam ? `Mark Entry: ${activeExam.title}` : 'Teacher Portal'}
             </h2>
           </div>
@@ -935,7 +965,7 @@ export const TeacherDashboard = () => {
                         onClick={() => startMarkEntry(exam)}
                         className="w-full gap-2 rounded-2xl"
                         variant={exam.status === 'Active' ? 'default' : 'secondary'}
-                        disabled={isFetchingStudents}
+                        disabled={isFetchingStudents || (exam.status !== 'Active' && !exam.published)}
                       >
                         {isFetchingStudents ? (
                           <div className="flex items-center gap-2">
@@ -944,7 +974,7 @@ export const TeacherDashboard = () => {
                           </div>
                         ) : (
                           <>
-                            {exam.status === 'Active' ? 'Enter Marks' : 'View Performance'}
+                            {exam.status === 'Active' ? 'Enter Marks' : (exam.published ? 'View Performance' : 'Results Pending')}
                             <ChevronRight className="w-4 h-4" />
                           </>
                         )}
@@ -1030,7 +1060,7 @@ export const TeacherDashboard = () => {
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+                    <table className="w-full text-left min-w-[800px]">
                       <thead>
                         <tr className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                           <th className="px-8 py-4">Admission No</th>
@@ -1145,7 +1175,7 @@ export const TeacherDashboard = () => {
                     >
                       <option value="">Select Examination...</option>
                       {exams
-                        .filter(e => e.classes.some((c: string) => assignedClasses.includes(c)))
+                        .filter(e => e.published && e.classes.some((c: string) => assignedClasses.includes(c)))
                         .map(e => (
                           <option key={e.id} value={e.id}>{e.title} ({e.term} {e.year})</option>
                         ))}
@@ -1160,7 +1190,7 @@ export const TeacherDashboard = () => {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[1000px]">
                       <thead>
                         <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-wider border-b border-gray-100">
                           {analysisOptions.showRank && <th className="px-4 py-4 sticky left-0 bg-gray-50 z-10">Rank</th>}
@@ -1429,7 +1459,7 @@ export const TeacherDashboard = () => {
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left">
+                  <table className="w-full text-left min-w-[600px]">
                     <thead>
                       <tr className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         <th className="px-8 py-4">Admission No</th>
@@ -1745,7 +1775,7 @@ export const TeacherDashboard = () => {
                 )}
 
                 <div className="overflow-x-auto border border-gray-100 rounded-2xl">
-                  <table className="w-full text-left">
+                  <table className="w-full text-left min-w-[500px]">
                     <thead>
                       <tr className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         <th className="px-6 py-4">Adm No</th>

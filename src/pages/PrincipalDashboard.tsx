@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Check,
   X,
+  Menu,
   MoreVertical,
   PlusCircle,
   Library,
@@ -79,9 +80,11 @@ export const PrincipalDashboard = () => {
   const [isSuspended, setIsSuspended] = useState(false);
   const [daysToExpiry, setDaysToExpiry] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'staff' | 'students' | 'academic' | 'settings' | 'classes' | 'users'>('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [managingClass, setManagingClass] = useState<any>(null);
   const [academicSubTab, setAcademicSubTab] = useState<'overview' | 'create-exam' | 'learning-area' | 'grading' | 'analysis' | 'reports' | 'results-processing' | 'academic-settings' | 'merit-list' | 'marks-entry'>('overview');
   const [topXCount, setTopXCount] = useState(10);
+  const [topXSubjectChampionsCount, setTopXSubjectChampionsCount] = useState(1);
   const [selectedProcessingClass, setSelectedProcessingClass] = useState('All');
   const [selectedAnalysisClass, setSelectedAnalysisClass] = useState('All');
   const [selectedProcessingExamId, setSelectedProcessingExamId] = useState('');
@@ -248,6 +251,10 @@ export const PrincipalDashboard = () => {
     }
     const exam = exams.find(e => e.id === selectedProcessingExamId);
     
+    // Update exam status
+    const updatedExams = exams.map(e => e.id === selectedProcessingExamId ? { ...e, published: true } : e);
+    setExams(updatedExams);
+
     addNotification({
       title: 'Results Published',
       message: `Analysed results for ${exam?.title} have been published to parents and students portals.`,
@@ -257,6 +264,28 @@ export const PrincipalDashboard = () => {
     });
     
     alert(`Results for ${exam?.title} have been published successfully!`);
+  };
+
+  const unpublishAnalysedResults = () => {
+    if (!selectedProcessingExamId) {
+      alert('Please select an examination first.');
+      return;
+    }
+    const exam = exams.find(e => e.id === selectedProcessingExamId);
+    
+    // Update exam status
+    const updatedExams = exams.map(e => e.id === selectedProcessingExamId ? { ...e, published: false } : e);
+    setExams(updatedExams);
+
+    addNotification({
+      title: 'Results Recalled',
+      message: `Analysed results for ${exam?.title} have been recalled/unpublished.`,
+      type: 'warning',
+      role: 'principal',
+      userId: 'admin'
+    });
+    
+    alert(`Results for ${exam?.title} have been recalled/unpublished successfully!`);
   };
 
   const downloadSubjectChampionsPDF = (subject: string) => {
@@ -640,6 +669,7 @@ export const PrincipalDashboard = () => {
         classes: ['Form 1', 'Form 2', 'Grade 7'], 
         subjects: ['Mathematics', 'English', 'Kiswahili', 'Science'],
         status: 'Active',
+        published: false,
         createdAt: new Date().toISOString()
       }
     ];
@@ -1570,12 +1600,16 @@ export const PrincipalDashboard = () => {
       );
       
       const sorted = subjectMarks.sort((a, b) => parseFloat(b.total || b.score) - parseFloat(a.total || a.score));
-      const championMark = sorted[0];
-      const champion = championMark ? students.find(s => s.id === championMark.studentId) : null;
+      const topX = sorted.slice(0, topXSubjectChampionsCount);
+      
+      const champions = topX.map(m => {
+        const student = students.find(s => s.id === m.studentId);
+        return student ? { ...student, studentName: student.name, studentClass: student.class, score: m.total || m.score } : null;
+      }).filter(Boolean);
       
       return {
         subject,
-        champion: champion ? { ...champion, score: championMark.total || championMark.score } : null
+        champions
       };
     });
   };
@@ -1934,27 +1968,46 @@ export const PrincipalDashboard = () => {
   if (!school) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 flex relative">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-72 bg-kenya-black text-white flex flex-col shrink-0">
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-72 bg-kenya-black text-white flex flex-col shrink-0 transition-transform duration-300 lg:relative lg:translate-x-0
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
         <div className="p-8">
-          <div className="flex items-center gap-3 mb-10">
-            <div className="bg-kenya-green p-2 rounded-lg">
-              <GraduationCap className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-between mb-10">
+            <div className="flex items-center gap-3">
+              <div className="bg-kenya-green p-2 rounded-lg">
+                <GraduationCap className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-xl font-bold tracking-tight">Alakara <span className="text-kenya-red">Principal</span></span>
             </div>
-            <span className="text-xl font-bold tracking-tight">Alakara <span className="text-kenya-red">Principal</span></span>
+            <button 
+              className="lg:hidden text-gray-400 hover:text-white"
+              onClick={() => setIsSidebarOpen(false)}
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
 
           <nav className="space-y-2">
             <button 
-              onClick={() => setActiveTab('dashboard')}
+              onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'dashboard' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
             >
               <LayoutDashboard className="w-5 h-5" />
               Dashboard
             </button>
             <button 
-              onClick={() => setActiveTab('staff')}
+              onClick={() => { setActiveTab('staff'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${isSuspended ? 'opacity-50 cursor-not-allowed' : activeTab === 'staff' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`} 
               disabled={isSuspended}
             >
@@ -1962,7 +2015,7 @@ export const PrincipalDashboard = () => {
               Staff Management
             </button>
             <button 
-              onClick={() => setActiveTab('students')}
+              onClick={() => { setActiveTab('students'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${isSuspended ? 'opacity-50 cursor-not-allowed' : activeTab === 'students' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`} 
               disabled={isSuspended}
             >
@@ -1970,7 +2023,7 @@ export const PrincipalDashboard = () => {
               Student Management
             </button>
             <button 
-              onClick={() => setActiveTab('classes')}
+              onClick={() => { setActiveTab('classes'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${isSuspended ? 'opacity-50 cursor-not-allowed' : activeTab === 'classes' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`} 
               disabled={isSuspended}
             >
@@ -1978,7 +2031,7 @@ export const PrincipalDashboard = () => {
               Class Management
             </button>
             <button 
-              onClick={() => setActiveTab('academic')}
+              onClick={() => { setActiveTab('academic'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${isSuspended ? 'opacity-50 cursor-not-allowed' : activeTab === 'academic' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`} 
               disabled={isSuspended}
             >
@@ -1986,7 +2039,7 @@ export const PrincipalDashboard = () => {
               Academic Records
             </button>
             <button 
-              onClick={() => setActiveTab('settings')}
+              onClick={() => { setActiveTab('settings'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${isSuspended ? 'opacity-50 cursor-not-allowed' : activeTab === 'settings' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`} 
               disabled={isSuspended}
             >
@@ -1994,7 +2047,7 @@ export const PrincipalDashboard = () => {
               School Settings
             </button>
             <button 
-              onClick={() => setActiveTab('users')}
+              onClick={() => { setActiveTab('users'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${isSuspended ? 'opacity-50 cursor-not-allowed' : activeTab === 'users' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`} 
               disabled={isSuspended}
             >
@@ -2018,10 +2071,16 @@ export const PrincipalDashboard = () => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0">
+        <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-8 shrink-0">
           <div className="flex items-center gap-4">
-            <h2 className="font-bold text-kenya-black text-lg">{school.name}</h2>
-            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${isSuspended ? 'bg-kenya-red/10 text-kenya-red' : 'bg-kenya-green/10 text-kenya-green'}`}>
+            <button 
+              className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={() => setIsSidebarOpen(true)}
+            >
+              <Menu className="w-6 h-6 text-kenya-black" />
+            </button>
+            <h2 className="font-bold text-kenya-black text-lg truncate max-w-[150px] sm:max-w-none">{school.name}</h2>
+            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider hidden xs:inline-block ${isSuspended ? 'bg-kenya-red/10 text-kenya-red' : 'bg-kenya-green/10 text-kenya-green'}`}>
               {school.status}
             </span>
           </div>
@@ -2224,8 +2283,8 @@ export const PrincipalDashboard = () => {
                   </Button>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                  <table className="w-full text-left">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
+                  <table className="w-full text-left min-w-[800px]">
                     <thead>
                       <tr className="bg-gray-50 text-xs font-bold text-gray-400 uppercase tracking-wider">
                         <th className="px-6 py-4">Name & Email</th>
@@ -2382,8 +2441,8 @@ export const PrincipalDashboard = () => {
                         <div className="h-px flex-1 bg-gray-200" />
                       </div>
                       
-                      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                        <table className="w-full text-left">
+                      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
+                        <table className="w-full text-left min-w-[600px]">
                           <thead>
                             <tr className="bg-gray-50 text-xs font-bold text-gray-400 uppercase tracking-wider">
                               <th className="px-6 py-4">Name</th>
@@ -2451,8 +2510,8 @@ export const PrincipalDashboard = () => {
                   </Button>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                  <table className="w-full text-left">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
+                  <table className="w-full text-left min-w-[600px]">
                     <thead>
                       <tr className="bg-gray-50 text-xs font-bold text-gray-400 uppercase tracking-wider">
                         <th className="px-6 py-4">Class Name</th>
@@ -2523,8 +2582,8 @@ export const PrincipalDashboard = () => {
                       <Users className="w-5 h-5 text-kenya-green" />
                       Staff Accounts
                     </h3>
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                      <table className="w-full text-left">
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
+                      <table className="w-full text-left min-w-[500px]">
                         <thead>
                           <tr className="bg-gray-50 text-xs font-bold text-gray-400 uppercase tracking-wider">
                             <th className="px-4 py-3">Name</th>
@@ -2550,8 +2609,8 @@ export const PrincipalDashboard = () => {
                       <UserCheck className="w-5 h-5 text-blue-600" />
                       Student Accounts
                     </h3>
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                      <table className="w-full text-left">
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
+                      <table className="w-full text-left min-w-[500px]">
                         <thead>
                           <tr className="bg-gray-50 text-xs font-bold text-gray-400 uppercase tracking-wider">
                             <th className="px-4 py-3">Name</th>
@@ -3513,6 +3572,10 @@ export const PrincipalDashboard = () => {
                             <Globe className="w-4 h-4" />
                             Publish Results
                           </Button>
+                          <Button onClick={unpublishAnalysedResults} variant="ghost" size="sm" className="gap-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50">
+                            <ShieldAlert className="w-4 h-4" />
+                            Recall Results
+                          </Button>
                           <select 
                             value={selectedProcessingClass}
                             onChange={(e) => setSelectedProcessingClass(e.target.value)}
@@ -3567,34 +3630,56 @@ export const PrincipalDashboard = () => {
                           <div className="space-y-6">
                             <div className="flex items-center justify-between">
                               <h4 className="font-black text-kenya-black uppercase tracking-widest text-sm">Subject Champions</h4>
-                              <span className="text-[10px] font-bold text-gray-400 uppercase">Top Performer per subject</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase">Show Top</span>
+                                <select 
+                                  value={topXSubjectChampionsCount}
+                                  onChange={(e) => setTopXSubjectChampionsCount(parseInt(e.target.value))}
+                                  className="text-[10px] font-black bg-white border border-gray-200 rounded px-1 py-0.5 focus:outline-none"
+                                >
+                                  <option value={1}>1</option>
+                                  <option value={3}>3</option>
+                                  <option value={5}>5</option>
+                                  <option value={10}>10</option>
+                                </select>
+                              </div>
                             </div>
                             <div className="grid grid-cols-1 gap-4">
                               {getSubjectChampions().map((item, idx) => (
-                                <div key={idx} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between group hover:border-kenya-green/30 transition-all">
-                                  <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm font-black text-kenya-green">
-                                      {item.subject.substring(0, 2).toUpperCase()}
-                                    </div>
-                                    <div>
+                                <div key={idx} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-4 group hover:border-kenya-green/30 transition-all">
+                                  <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm font-black text-kenya-green text-xs">
+                                        {item.subject.substring(0, 2).toUpperCase()}
+                                      </div>
                                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{item.subject}</p>
-                                      <p className="font-bold text-kenya-black">{item.champion ? item.champion.studentName : 'No data'}</p>
-                                      {item.champion && (
-                                        <button 
-                                          onClick={() => setViewingSubjectChampions(item.subject)}
-                                          className="text-[10px] font-bold text-kenya-green hover:underline mt-1"
-                                        >
-                                          View All Champions
-                                        </button>
-                                      )}
                                     </div>
+                                    <button 
+                                      onClick={() => setViewingSubjectChampions(item.subject)}
+                                      className="text-[10px] font-bold text-kenya-green hover:underline"
+                                    >
+                                      View All
+                                    </button>
                                   </div>
-                                  {item.champion && (
-                                    <div className="text-right">
-                                      <p className="text-lg font-black text-kenya-green">{item.champion.score}%</p>
-                                      <p className="text-[10px] font-bold text-gray-400 uppercase">{item.champion.studentClass}</p>
-                                    </div>
-                                  )}
+                                  
+                                  <div className="space-y-3">
+                                    {item.champions.length > 0 ? item.champions.map((champ: any, cIdx: number) => (
+                                      <div key={cIdx} className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-[10px] font-black text-gray-300 w-4">#{cIdx + 1}</span>
+                                          <div>
+                                            <p className="text-sm font-bold text-kenya-black leading-none">{champ.studentName}</p>
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase mt-1">{champ.studentClass}</p>
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="text-sm font-black text-kenya-green">{champ.score}%</p>
+                                        </div>
+                                      </div>
+                                    )) : (
+                                      <p className="text-xs text-gray-400 italic text-center py-2">No data available</p>
+                                    )}
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -3619,8 +3704,8 @@ export const PrincipalDashboard = () => {
                                 </select>
                               </div>
                             </div>
-                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                              <table className="w-full text-left">
+                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
+                              <table className="w-full text-left min-w-[400px]">
                                 <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-wider">
                                   <tr>
                                     <th className="px-4 py-3">Rank</th>
@@ -5144,7 +5229,8 @@ export const PrincipalDashboard = () => {
                 </div>
               </div>
               <div className="p-6 max-h-[60vh] overflow-y-auto">
-                <table className="w-full text-left">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left min-w-[400px]">
                   <thead className="text-[10px] font-black text-gray-400 uppercase tracking-wider border-b border-gray-100">
                     <tr>
                       <th className="px-4 py-3">Rank</th>
@@ -5188,8 +5274,9 @@ export const PrincipalDashboard = () => {
                   </tbody>
                 </table>
               </div>
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
+        </div>
         )}
       </main>
     </div>
