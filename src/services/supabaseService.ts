@@ -168,5 +168,65 @@ export const supabaseService = {
       .from('public-resources')
       .getPublicUrl(fileName);
     return publicUrl;
+  },
+
+  async syncData(schoolId: string = 'default-school') {
+    try {
+      // 1. Sync Students
+      const { data: remoteStudents, error: studentsError } = await supabase.from('students').select('*');
+      if (!studentsError && remoteStudents) {
+        if (remoteStudents.length > 0) {
+          localStorage.setItem('alakara_students', JSON.stringify(remoteStudents));
+        } else {
+          const localStudents = JSON.parse(localStorage.getItem('alakara_students') || '[]');
+          if (localStudents.length > 0) {
+            const mapped = localStudents.map((s: any) => ({
+              id: s.id, name: s.name, adm: s.adm, class: s.class, gender: s.gender || 'Unknown', status: s.status || 'Active', school_id: schoolId
+            }));
+            await supabase.from('students').upsert(mapped);
+          }
+        }
+      }
+
+      // 2. Sync Classes
+      const { data: remoteClasses, error: classesError } = await supabase.from('classes').select('*');
+      if (!classesError && remoteClasses) {
+        if (remoteClasses.length > 0) {
+          localStorage.setItem('alakara_classes', JSON.stringify(remoteClasses));
+        } else {
+          const localClasses = JSON.parse(localStorage.getItem('alakara_classes') || '[]');
+          if (localClasses.length > 0) {
+            const mapped = localClasses.map((c: any) => ({
+              id: c.id, name: c.name, teacher_id: c.teacherId || null, capacity: c.capacity || 40, school_id: schoolId
+            }));
+            await supabase.from('classes').upsert(mapped);
+          }
+        }
+      }
+
+      // 3. Sync Marks
+      const { data: remoteMarks, error: marksError } = await supabase.from('marks').select('*');
+      if (!marksError && remoteMarks) {
+        if (remoteMarks.length > 0) {
+          const mappedLocal = remoteMarks.map(m => ({
+            id: m.id, examId: m.exam_id, studentId: m.student_id, subject: m.subject_id, score: String(m.score), total: m.score, grade: m.grade
+          }));
+          localStorage.setItem('alakara_marks', JSON.stringify(mappedLocal));
+        } else {
+          const localMarks = JSON.parse(localStorage.getItem('alakara_marks') || '[]');
+          if (localMarks.length > 0) {
+            const mapped = localMarks.map((m: any) => ({
+              id: m.id, student_id: m.studentId, subject_id: m.subject, exam_id: m.examId, score: parseFloat(m.score) || 0, grade: m.grade
+            }));
+            await supabase.from('marks').upsert(mapped);
+          }
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Sync failed:', error);
+      return false;
+    }
   }
 };

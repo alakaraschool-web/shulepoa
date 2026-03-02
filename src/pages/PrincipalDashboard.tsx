@@ -841,6 +841,17 @@ export const PrincipalDashboard = () => {
   }, [staff]);
 
   useEffect(() => {
+    supabaseService.syncData().then(() => {
+      const savedStudents = localStorage.getItem('alakara_students');
+      if (savedStudents) setStudents(JSON.parse(savedStudents));
+      const savedClasses = localStorage.getItem('alakara_classes');
+      if (savedClasses) setClasses(JSON.parse(savedClasses));
+      const savedMarks = localStorage.getItem('alakara_marks');
+      if (savedMarks) setMarks(JSON.parse(savedMarks));
+    });
+  }, []);
+
+  useEffect(() => {
     const checkStatus = () => {
       const currentSchool = JSON.parse(localStorage.getItem('alakara_current_school') || '{}');
       const allSchools = JSON.parse(localStorage.getItem('alakara_schools') || '[]');
