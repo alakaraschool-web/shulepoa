@@ -78,7 +78,8 @@ export const PrincipalDashboard = () => {
   const [school, setSchool] = useState<any>(null);
   const [isSuspended, setIsSuspended] = useState(false);
   const [daysToExpiry, setDaysToExpiry] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'staff' | 'students' | 'academic' | 'settings' | 'classes'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'staff' | 'students' | 'academic' | 'settings' | 'classes' | 'users'>('dashboard');
+  const [managingClass, setManagingClass] = useState<any>(null);
   const [academicSubTab, setAcademicSubTab] = useState<'overview' | 'create-exam' | 'learning-area' | 'grading' | 'analysis' | 'reports' | 'results-processing' | 'academic-settings' | 'merit-list'>('overview');
   const [topXCount, setTopXCount] = useState(10);
   const [selectedProcessingClass, setSelectedProcessingClass] = useState('All');
@@ -236,11 +237,7 @@ export const PrincipalDashboard = () => {
     const detailsY = margin + 45;
     doc.rect(margin, detailsY, pageWidth - (margin * 2), 25);
     
-    const classStudents = students.filter(s => {
-      const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-      const targetClass = typeof student.class === 'string' ? student.class.trim() : (student.class?.name || '');
-      return studentClass === targetClass;
-    });
+    const classStudents = students.filter(s => s.class === student.class);
     const examId = reportConfig.selectedExamIds[0];
     const examMarks = marks.filter(m => m.examId === examId);
     
@@ -258,8 +255,6 @@ export const PrincipalDashboard = () => {
     }).sort((a, b) => b.total - a.total);
     const overallPos = overallRankings.findIndex(r => r.id === student.id) + 1;
 
-    const studentClassStr = typeof student.class === 'string' ? student.class.trim() : (student.class?.name || '');
-
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.text(`Adm No : ${student.adm}`, margin + 5, detailsY + 7);
@@ -267,7 +262,7 @@ export const PrincipalDashboard = () => {
     doc.text(`Kpsea : `, margin + 140, detailsY + 7);
 
     doc.text(`UPI No : A23WERTYST`, margin + 5, detailsY + 14);
-    doc.text(`Grade : ${studentClassStr} A 2026`, margin + 60, detailsY + 14);
+    doc.text(`Grade : ${student.class} A 2026`, margin + 60, detailsY + 14);
     doc.text(`Term : 1`, margin + 140, detailsY + 14);
 
     doc.text(`House : `, margin + 5, detailsY + 21);
@@ -287,8 +282,7 @@ export const PrincipalDashboard = () => {
       }).sort((a, b) => b.score - a.score);
       const subRank = subjectRankings.findIndex(r => r.id === student.id) + 1;
 
-      const studentClass = typeof student.class === 'string' ? student.class.trim() : (student.class?.name || '');
-      const teacher = staff.find(t => t.assignedSubjects?.includes(subject) && t.assignedClasses?.some(ac => ac.trim() === studentClass))?.name.split(' ')[0] || 'N/A';
+      const teacher = staff.find(t => t.assignedSubjects?.includes(subject) && t.assignedClasses?.includes(student.class))?.name.split(' ')[0] || 'N/A';
 
       return [
         subject.toUpperCase(),
@@ -379,10 +373,7 @@ export const PrincipalDashboard = () => {
       return;
     }
 
-    const classStudents = students.filter(s => {
-      const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-      return studentClass === className.trim();
-    });
+    const classStudents = students.filter(s => s.class === className);
     if (classStudents.length === 0) {
       alert('No students found in this class.');
       return;
@@ -1115,10 +1106,7 @@ export const PrincipalDashboard = () => {
   const getAnalyticsData = () => {
     // 1. Class Performance Comparison
     const classPerformance = classes.map(c => {
-      const classStudents = students.filter(s => {
-        const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-        return studentClass === c.name.trim();
-      });
+      const classStudents = students.filter(s => s.class === c.name);
       const classMarks = marks.filter(m => classStudents.some(s => s.id === m.studentId));
       const totalScore = classMarks.reduce((sum, m) => sum + (m.total || 0), 0);
       const count = classMarks.length;
@@ -1210,10 +1198,7 @@ export const PrincipalDashboard = () => {
     if (!exam) return [];
 
     // 1. Get all students in the exam classes
-    const examStudents = students.filter(s => {
-      const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-      return exam.classes.some((c: string) => c.trim() === studentClass);
-    });
+    const examStudents = students.filter(s => exam.classes.includes(s.class));
 
     // 2. Calculate scores for all students
     const studentAnalysis = examStudents.map(student => {
@@ -1254,21 +1239,14 @@ export const PrincipalDashboard = () => {
 
     // 4. Calculate CLS POS (Class Rank)
     const finalData = withOverallRank.map(student => {
-      const studentClass = typeof student.class === 'string' ? student.class.trim() : (student.class?.name || '');
-      const classStudents = withOverallRank.filter(s => {
-        const sClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-        return sClass === studentClass;
-      });
+      const classStudents = withOverallRank.filter(s => s.class === student.class);
       const classRanked = classStudents.sort((a, b) => b.totalScore - a.totalScore);
       const clsPos = classRanked.findIndex(s => s.id === student.id) + 1;
       return { ...student, clsPos };
     });
 
     // 5. Filter by selected class if needed
-    const filtered = finalData.filter(s => {
-      const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-      return selectedAnalysisClass === 'All' || studentClass === selectedAnalysisClass.trim();
-    });
+    const filtered = finalData.filter(s => selectedAnalysisClass === 'All' || s.class === selectedAnalysisClass);
 
     // 6. Apply custom sorting
     return filtered.sort((a, b) => {
@@ -1295,10 +1273,7 @@ export const PrincipalDashboard = () => {
 
     // Group marks by student
     const studentAnalysis = students
-      .filter(s => {
-        const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-        return selectedAnalysisClass === 'All' || studentClass === selectedAnalysisClass.trim();
-      })
+      .filter(s => (selectedAnalysisClass === 'All' || s.class === selectedAnalysisClass))
       .map(student => {
         const studentMarks = examMarks.filter(m => m.studentId === student.id);
         const subjectScores: any = {};
@@ -1349,11 +1324,7 @@ export const PrincipalDashboard = () => {
       const subjectMarks = marks.filter(m => 
         m.examId === selectedProcessingExamId && 
         m.subject === subject &&
-        (selectedProcessingClass === 'All' || (() => {
-          const s = students.find(st => st.id === m.studentId);
-          const sClass = typeof s?.class === 'string' ? s.class.trim() : (s?.class?.name || '');
-          return sClass === selectedProcessingClass.trim();
-        })())
+        (selectedProcessingClass === 'All' || students.find(s => s.id === m.studentId)?.class === selectedProcessingClass)
       );
       
       const sorted = subjectMarks.sort((a, b) => parseFloat(b.total || b.score) - parseFloat(a.total || a.score));
@@ -1373,10 +1344,9 @@ export const PrincipalDashboard = () => {
     const exam = exams.find(e => e.id === selectedProcessingExamId);
     if (!exam) return [];
 
-    const classStudents = students.filter(s => {
-      const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-      return (selectedProcessingClass === 'All' ? exam.classes.some(c => c.trim() === studentClass) : studentClass === selectedProcessingClass.trim());
-    });
+    const classStudents = students.filter(s => 
+      (selectedProcessingClass === 'All' ? exam.classes.includes(s.class) : s.class === selectedProcessingClass)
+    );
     
     const processed = classStudents.map(student => {
       const studentMarks = marks.filter(m => m.examId === selectedProcessingExamId && m.studentId === student.id);
@@ -1534,12 +1504,11 @@ export const PrincipalDashboard = () => {
       const mainSheetData = data.map(row => {
         const exportRow: any = {};
         
-        const studentClass = typeof row.class === 'string' ? row.class.trim() : (row.class?.name || '');
         if (isMeritList) {
           exportRow['ADMNO'] = row.adm;
           exportRow['FULL NAMES'] = row.name;
           exportRow['KPSEA'] = '';
-          exportRow['STR'] = studentClass.substring(0, 1);
+          exportRow['STR'] = row.class.substring(0, 1);
           learningAreas.forEach(la => {
             exportRow[la.substring(0, 4).toUpperCase()] = row.subjectScores[la] ?? '';
           });
@@ -1551,7 +1520,7 @@ export const PrincipalDashboard = () => {
           exportRow['Rank'] = row.rank;
           exportRow['Adm No'] = row.adm;
           exportRow['Student Name'] = row.name;
-          exportRow['Class'] = studentClass;
+          exportRow['Class'] = row.class;
           learningAreas.forEach(la => {
             exportRow[la] = row.subjectScores[la] ?? '--';
           });
@@ -1781,6 +1750,14 @@ export const PrincipalDashboard = () => {
             >
               <Settings className="w-5 h-5" />
               School Settings
+            </button>
+            <button 
+              onClick={() => setActiveTab('users')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${isSuspended ? 'opacity-50 cursor-not-allowed' : activeTab === 'users' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`} 
+              disabled={isSuspended}
+            >
+              <ShieldCheck className="w-5 h-5" />
+              System Users
             </button>
           </nav>
         </div>
@@ -2246,10 +2223,7 @@ export const PrincipalDashboard = () => {
                     <tbody className="divide-y divide-gray-100">
                       {classes.map((cls) => {
                         const teacher = staff.find(s => s.id === cls.teacherId);
-                        const enrolled = students.filter(s => {
-                          const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-                          return studentClass === cls.name.trim();
-                        }).length;
+                        const enrolled = students.filter(s => s.class === cls.name).length;
                         return (
                           <tr key={cls.id} className="hover:bg-gray-50/50 transition-colors">
                             <td className="px-6 py-4 font-bold text-kenya-black">{cls.name}</td>
@@ -2262,6 +2236,13 @@ export const PrincipalDashboard = () => {
                             </td>
                             <td className="px-6 py-4 text-right">
                               <div className="flex items-center justify-end gap-2">
+                                <button 
+                                  onClick={() => setManagingClass(cls)}
+                                  className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                                  title="Manage Students"
+                                >
+                                  <Users className="w-4 h-4" />
+                                </button>
                                 <button 
                                   onClick={() => openEditClass(cls)}
                                   className="p-2 text-gray-400 hover:text-kenya-green transition-colors"
@@ -2283,6 +2264,71 @@ export const PrincipalDashboard = () => {
                       })}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            ) : activeTab === 'users' ? (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-kenya-black">System Users & Credentials</h2>
+                    <p className="text-gray-500">View and manage all user accounts and their passwords.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-bold text-kenya-black flex items-center gap-2">
+                      <Users className="w-5 h-5 text-kenya-green" />
+                      Staff Accounts
+                    </h3>
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-gray-50 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                            <th className="px-4 py-3">Name</th>
+                            <th className="px-4 py-3">Username/Email</th>
+                            <th className="px-4 py-3">Password</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {staff.map((member) => (
+                            <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
+                              <td className="px-4 py-3 font-bold text-sm">{member.name}</td>
+                              <td className="px-4 py-3 text-sm text-gray-500">{member.username || member.email}</td>
+                              <td className="px-4 py-3 font-mono text-xs text-kenya-red font-bold">{member.password || '********'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-bold text-kenya-black flex items-center gap-2">
+                      <UserCheck className="w-5 h-5 text-blue-600" />
+                      Student Accounts
+                    </h3>
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-gray-50 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                            <th className="px-4 py-3">Name</th>
+                            <th className="px-4 py-3">Admission No</th>
+                            <th className="px-4 py-3">Password</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {students.map((student) => (
+                            <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
+                              <td className="px-4 py-3 font-bold text-sm">{student.name}</td>
+                              <td className="px-4 py-3 text-sm text-gray-500">{student.adm}</td>
+                              <td className="px-4 py-3 font-mono text-xs text-kenya-red font-bold">{student.password || '********'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : activeTab === 'academic' ? (
@@ -4229,11 +4275,7 @@ export const PrincipalDashboard = () => {
                   {/* Student Details Section */}
                   {(() => {
                     const student = students.find(s => s.id === reportConfig.selectedStudentId);
-                    const classStudents = students.filter(s => {
-                      const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-                      const targetClass = typeof student?.class === 'string' ? student.class.trim() : (student?.class?.name || '');
-                      return studentClass === targetClass;
-                    });
+                    const classStudents = students.filter(s => s.class === student?.class);
                     const allStudents = students;
                     
                     // Calculate overall rank
@@ -4301,10 +4343,9 @@ export const PrincipalDashboard = () => {
                       <tbody>
                         {learningAreas.map(subject => {
                           const student = students.find(s => s.id === reportConfig.selectedStudentId);
-                          const studentClass = typeof student?.class === 'string' ? student.class.trim() : (student?.class?.name || '');
                           const subjectTeacher = staff.find(t => 
                             t.assignedSubjects?.includes(subject) && 
-                            t.assignedClasses?.some(ac => ac.trim() === studentClass)
+                            t.assignedClasses?.includes(student?.class)
                           );
 
                           const examId = reportConfig.selectedExamIds[0];
@@ -4314,10 +4355,7 @@ export const PrincipalDashboard = () => {
                           const grade = gradeObj ? gradeObj.grade : '--';
 
                           // Calculate subject rank
-                          const classStudents = students.filter(s => {
-                            const sClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-                            return sClass === studentClass;
-                          });
+                          const classStudents = students.filter(s => s.class === student?.class);
                           const subjectRankings = classStudents.map(s => {
                             const sMark = marks.find(m => m.studentId === s.id && m.examId === examId && m.subject === subject);
                             return { id: s.id, score: sMark ? parseFloat(sMark.score) : 0 };
@@ -4410,17 +4448,13 @@ export const PrincipalDashboard = () => {
                         <tbody>
                           {(() => {
                             const student = students.find(s => s.id === reportConfig.selectedStudentId);
-                            const studentClass = typeof student?.class === 'string' ? student.class.trim() : (student?.class?.name || '');
                             const examId = reportConfig.selectedExamIds[0];
                             const studentMarks = marks.filter(m => m.studentId === student?.id && m.examId === examId);
                             const total = studentMarks.reduce((sum, m) => sum + parseFloat(m.score as string), 0);
                             const avg = studentMarks.length > 0 ? total / studentMarks.length : 0;
                             const gradeObj = gradingSystem.find(g => avg >= g.min && avg <= g.max);
                             
-                            const classStudents = students.filter(s => {
-                              const sClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-                              return sClass === studentClass;
-                            });
+                            const classStudents = students.filter(s => s.class === student?.class);
                             const rankings = classStudents.map(s => {
                               const sMarks = marks.filter(m => m.examId === examId && m.studentId === s.id);
                               const t = sMarks.reduce((sum, m) => sum + parseFloat(m.score as string), 0);
@@ -4510,6 +4544,108 @@ export const PrincipalDashboard = () => {
                       <p className="font-black italic uppercase tracking-widest">{schoolSettings.motto || 'STRIVE FOR EXCELLENCE'}</p>
                       <p className="text-[8px] font-bold text-gray-400 mt-1">Not valid if without an official school rubber stamp</p>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Manage Class Students Modal */}
+        {managingClass && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-kenya-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white rounded-[2.5rem] w-full max-w-4xl p-8 shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="flex items-center justify-between mb-8 shrink-0">
+                <div>
+                  <h3 className="text-2xl font-bold text-kenya-black">Manage Students: {managingClass.name}</h3>
+                  <p className="text-gray-500">Add or remove students from this class.</p>
+                </div>
+                <button onClick={() => setManagingClass(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-2 space-y-8">
+                {/* Add Student to this Class */}
+                <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
+                  <h4 className="font-bold text-kenya-black mb-4 flex items-center gap-2">
+                    <UserPlus className="w-4 h-4 text-kenya-green" />
+                    Add Student to {managingClass.name}
+                  </h4>
+                  <div className="flex gap-4">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input 
+                        type="text"
+                        placeholder="Search student by name or admission number to add..."
+                        className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const query = (e.target as HTMLInputElement).value;
+                            const found = students.find(s => s.name.toLowerCase().includes(query.toLowerCase()) || s.adm.includes(query));
+                            if (found) {
+                              setStudents(students.map(s => s.id === found.id ? { ...s, class: managingClass.name } : s));
+                              (e.target as HTMLInputElement).value = '';
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                    <Button onClick={() => { setManagingClass(null); setActiveTab('students'); setShowAddStudentModal(true); }}>
+                      Register New Student
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-2 ml-1 italic">Type name/adm and press Enter to quickly move a student to this class.</p>
+                </div>
+
+                {/* Current Students in this Class */}
+                <div className="space-y-4">
+                  <h4 className="font-bold text-kenya-black flex items-center gap-2">
+                    <Users className="w-4 h-4 text-blue-600" />
+                    Enrolled Students ({students.filter(s => s.class === managingClass.name).length})
+                  </h4>
+                  <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-gray-50 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                          <th className="px-6 py-4">Name</th>
+                          <th className="px-6 py-4">Admission No</th>
+                          <th className="px-6 py-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {students.filter(s => s.class === managingClass.name).map((student) => (
+                          <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="px-6 py-4 font-bold text-kenya-black">{student.name}</td>
+                            <td className="px-6 py-4 font-mono text-sm text-gray-500">{student.adm}</td>
+                            <td className="px-6 py-4 text-right">
+                              <button 
+                                onClick={() => {
+                                  if (window.confirm(`Remove ${student.name} from ${managingClass.name}?`)) {
+                                    setStudents(students.map(s => s.id === student.id ? { ...s, class: 'Unassigned' } : s));
+                                  }
+                                }}
+                                className="p-2 text-gray-400 hover:text-kenya-red transition-colors"
+                                title="Remove from Class"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {students.filter(s => s.class === managingClass.name).length === 0 && (
+                          <tr>
+                            <td colSpan={3} className="px-6 py-8 text-center text-gray-400 italic">
+                              No students currently enrolled in this class.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>

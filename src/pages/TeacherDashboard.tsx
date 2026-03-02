@@ -199,7 +199,7 @@ export const TeacherDashboard = () => {
 
   const assignedClasses = Array.from(new Set(currentTeacher.assignments.map((a: any) => {
     const cls = classes.find(c => c.id === a.classId);
-    return cls ? cls.name.trim() : '';
+    return cls ? cls.name : '';
   }).filter(Boolean))) as string[];
   
   const managedClass = classes.find(c => c.teacherId === currentTeacher.id);
@@ -282,12 +282,10 @@ export const TeacherDashboard = () => {
 
   const filteredStudents = activeExam ? allStudents.filter(s => {
     const selectedClass = classes.find(c => c.id === entryConfig.classId);
-    const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-    
-    const matchesClass = !entryConfig.classId || studentClass === selectedClass?.name?.trim();
+    const matchesClass = !entryConfig.classId || s.class?.trim() === selectedClass?.name?.trim();
     const matchesStream = !entryConfig.streamId || s.streamId === entryConfig.streamId;
-    const classInExam = activeExam.classes.some((c: string) => c.trim() === studentClass);
-    const classInAssignments = assignedClasses.some((c: string) => c.trim() === studentClass);
+    const classInExam = activeExam.classes.some((c: string) => c.trim() === s.class?.trim());
+    const classInAssignments = assignedClasses.some((c: string) => c.trim() === s.class?.trim());
     return matchesClass && matchesStream && classInExam && classInAssignments;
   }) : [];
 
@@ -323,7 +321,7 @@ export const TeacherDashboard = () => {
     const student = {
       id: Math.random().toString(36).substr(2, 9),
       ...newStudent,
-      class: managedClass ? managedClass.name : '',
+      class: managedClass,
       status: 'Active'
     };
     setAllStudents([...allStudents, student]);
@@ -623,12 +621,7 @@ export const TeacherDashboard = () => {
 
     // Group marks by student - Filtered by assigned classes
     const studentAnalysis = allStudents
-      .filter(s => {
-        const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-        return exam.classes.some((c: string) => c.trim() === studentClass) && 
-               assignedClasses.some((c: string) => c.trim() === studentClass) && 
-               (selectedAnalysisClass === 'All' || studentClass === selectedAnalysisClass.trim());
-      })
+      .filter(s => exam.classes.includes(s.class) && assignedClasses.includes(s.class) && (selectedAnalysisClass === 'All' || s.class === selectedAnalysisClass))
       .map(student => {
         const studentMarks = examMarks.filter(m => m.studentId === student.id);
         const subjectScores: any = {};
@@ -796,8 +789,7 @@ export const TeacherDashboard = () => {
                         <span className="text-[10px] font-black uppercase tracking-wider">
                           {allStudents.filter(s => {
                             const className = classes.find(c => c.id === entryConfig.classId)?.name;
-                            const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-                            const matchesClass = studentClass === className?.trim();
+                            const matchesClass = s.class?.trim() === className?.trim();
                             const matchesStream = !entryConfig.streamId || s.streamId === entryConfig.streamId;
                             return matchesClass && matchesStream;
                           }).length} Students Found
@@ -910,7 +902,7 @@ export const TeacherDashboard = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {exams
-                    .filter(exam => exam.classes.some((c: string) => assignedClasses.some(ac => ac === c.trim())))
+                    .filter(exam => exam.classes.some((c: string) => assignedClasses.includes(c)))
                     .map((exam) => (
                       <motion.div
                         key={exam.id}
@@ -1153,7 +1145,7 @@ export const TeacherDashboard = () => {
                     >
                       <option value="">Select Examination...</option>
                       {exams
-                        .filter(e => e.classes.some((c: string) => assignedClasses.some(ac => ac === c.trim())))
+                        .filter(e => e.classes.some((c: string) => assignedClasses.includes(c)))
                         .map(e => (
                           <option key={e.id} value={e.id}>{e.title} ({e.term} {e.year})</option>
                         ))}
@@ -1432,10 +1424,7 @@ export const TeacherDashboard = () => {
                   <h3 className="text-xl font-bold text-kenya-black">Student List</h3>
                   <div className="flex items-center gap-2">
                     <span className="px-3 py-1 bg-kenya-green/10 text-kenya-green rounded-full text-[10px] font-black uppercase tracking-widest">
-                      {allStudents.filter(s => {
-                        const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-                        return studentClass === managedClass?.name?.trim();
-                      }).length} Students
+                      {allStudents.filter(s => s.class === managedClass?.name).length} Students
                     </span>
                   </div>
                 </div>
@@ -1452,10 +1441,7 @@ export const TeacherDashboard = () => {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {allStudents
-                        .filter(s => {
-                          const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-                          return studentClass === managedClass?.name?.trim();
-                        })
+                        .filter(s => s.class?.trim() === managedClass?.name?.trim())
                         .map((student) => (
                           <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
                             <td className="px-8 py-6 font-mono text-sm text-gray-500">{student.adm}</td>
@@ -1481,10 +1467,7 @@ export const TeacherDashboard = () => {
                             </td>
                           </tr>
                         ))}
-                      {allStudents.filter(s => {
-                        const studentClass = typeof s.class === 'string' ? s.class.trim() : (s.class?.name || '');
-                        return studentClass === managedClass?.name?.trim();
-                      }).length === 0 && (
+                      {allStudents.filter(s => s.class === managedClass?.name).length === 0 && (
                         <tr>
                           <td colSpan={5} className="px-8 py-20 text-center text-gray-400 italic">
                             No students admitted to this class yet.
