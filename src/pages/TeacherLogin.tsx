@@ -29,35 +29,41 @@ export const TeacherLogin = () => {
       // 1. Try authenticating with Supabase Auth first
       // We only attempt this if it looks like an email address
       let authError = null;
-      if (cleanUsername.includes('@')) {
-        const { data: authData, error } = await supabase.auth.signInWithPassword({
-          email: cleanUsername,
-          password: password,
-        });
-        
-        authError = error;
+      const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_URL !== 'your-supabase-url';
 
-        if (authData?.user) {
-          // Fetch profile to get name and role
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', authData.user.id)
-            .single();
+      if (isSupabaseConfigured && cleanUsername.includes('@')) {
+        try {
+          const { data: authData, error } = await supabase.auth.signInWithPassword({
+            email: cleanUsername,
+            password: password,
+          });
+          
+          authError = error;
 
-          const currentTeacher = {
-            id: authData.user.id,
-            name: profile?.name || authData.user.email?.split('@')[0] || 'Teacher',
-            role: profile?.role || 'Teacher',
-            email: authData.user.email,
-            username: authData.user.email,
-            assignedClasses: [], // In a full app, fetch from assignments table
-            avatar_url: profile?.avatar_url
-          };
+          if (authData?.user) {
+            // Fetch profile to get name and role
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', authData.user.id)
+              .single();
 
-          localStorage.setItem('alakara_current_teacher', JSON.stringify(currentTeacher));
-          navigate('/teacher/dashboard');
-          return;
+            const currentTeacher = {
+              id: authData.user.id,
+              name: profile?.name || authData.user.email?.split('@')[0] || 'Teacher',
+              role: profile?.role || 'Teacher',
+              email: authData.user.email,
+              username: authData.user.email,
+              assignedClasses: [], // In a full app, fetch from assignments table
+              avatar_url: profile?.avatar_url
+            };
+
+            localStorage.setItem('alakara_current_teacher', JSON.stringify(currentTeacher));
+            navigate('/teacher/dashboard');
+            return;
+          }
+        } catch (e) {
+          console.warn("Supabase auth failed, falling back to local storage", e);
         }
       }
 
@@ -76,7 +82,9 @@ export const TeacherLogin = () => {
           navigate('/teacher/dashboard');
         }
       } else {
-        setError(authError?.message || 'Invalid teacher credentials');
+        // If authError is a network error (like Failed to fetch), just show generic invalid credentials
+        const isNetworkError = authError?.message?.toLowerCase().includes('fetch');
+        setError(!isNetworkError && authError?.message ? authError.message : 'Invalid teacher credentials');
       }
     } catch (err: any) {
       console.error('Login error:', err);
