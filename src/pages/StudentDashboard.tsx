@@ -10,11 +10,14 @@ import {
   FileText,
   Star,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  Menu,
+  X
 } from 'lucide-react';
 import { NotificationBell } from '../components/NotificationBell';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
+import { supabaseService } from '../services/supabaseService';
 
 export const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -24,39 +27,38 @@ export const StudentDashboard = () => {
   const [staff, setStaff] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'learning' | 'exams' | 'results' | 'materials'>('learning');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const [currentStudent, setCurrentStudent] = useState<any>(() => {
-    const saved = localStorage.getItem('alakara_current_student');
-    return saved ? JSON.parse(saved) : { id: 'S1', name: 'Alice Wanjiku', adm: 'ADM-2024-001', class: 'Form 1' };
-  });
+  const [currentStudent, setCurrentStudent] = useState<any>(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  const fetchData = async (studentId: string, studentClass: string) => {
+    setIsLoadingData(true);
+    try {
+      const [materialsData, examsData, marksData] = await Promise.all([
+        supabaseService.getMaterials(), // Need to add this
+        supabaseService.getExamsByClass(studentClass), // Need to add this
+        supabaseService.getMarksByStudent(studentId)
+      ]);
+
+      setMaterials(materialsData.filter((m: any) => m.status === 'Approved' && m.visibility === 'Public'));
+      setExams(examsData.filter((e: any) => e.locked)); // Assuming locked means published for students
+      setMarks(marksData);
+    } catch (error) {
+      console.error('Error fetching student data:', error);
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
 
   useEffect(() => {
-    const loadData = () => {
-      const savedMaterials = localStorage.getItem('alakara_exam_materials');
-      if (savedMaterials) {
-        const allMaterials = JSON.parse(savedMaterials);
-        setMaterials(allMaterials.filter((m: any) => m.status === 'Approved' && m.visibility === 'Public'));
-      }
-
-      const savedExams = localStorage.getItem('alakara_exams');
-      if (savedExams) {
-        setExams(JSON.parse(savedExams).filter((e: any) => e.classes.includes(currentStudent.class)));
-      }
-
-      const savedMarks = localStorage.getItem('alakara_marks');
-      if (savedMarks) {
-        setMarks(JSON.parse(savedMarks).filter((m: any) => m.studentId === currentStudent.id));
-      }
-
-      const savedStaff = localStorage.getItem('alakara_staff');
-      if (savedStaff) {
-        setStaff(JSON.parse(savedStaff));
-      }
-    };
-
-    loadData();
-    const interval = setInterval(loadData, 2000);
-    return () => clearInterval(interval);
+    const student = JSON.parse(localStorage.getItem('alakara_current_student') || '{}');
+    if (student && student.id) {
+      setCurrentStudent(student);
+      fetchData(student.id, student.class);
+    } else {
+      navigate('/student-login');
+    }
   }, []);
 
   const handleLogout = () => {
@@ -69,41 +71,60 @@ export const StudentDashboard = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#FF6321] flex font-sans">
+    <div className="min-h-screen bg-[#FF6321] flex font-sans relative">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-72 bg-black text-white flex flex-col shrink-0 border-r-8 border-black">
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-72 bg-black text-white flex flex-col shrink-0 border-r-8 border-black transition-transform duration-300 lg:relative lg:translate-x-0
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
         <div className="p-8">
-          <div className="flex items-center gap-3 mb-12 group cursor-pointer" onClick={() => navigate('/')}>
-            <div className="bg-white p-2 rounded-xl group-hover:rotate-12 transition-transform">
-              <GraduationCap className="w-8 h-8 text-black" />
+          <div className="flex items-center justify-between mb-12">
+            <div className="flex items-center gap-3 group cursor-pointer" onClick={() => navigate('/')}>
+              <div className="bg-white p-2 rounded-xl group-hover:rotate-12 transition-transform">
+                <GraduationCap className="w-8 h-8 text-black" />
+              </div>
+              <span className="text-2xl font-black tracking-tighter uppercase italic">Alakara <span className="text-[#FF6321]">Students</span></span>
             </div>
-            <span className="text-2xl font-black tracking-tighter uppercase italic">Alakara <span className="text-[#FF6321]">Students</span></span>
+            <button 
+              className="lg:hidden text-gray-400 hover:text-white"
+              onClick={() => setIsSidebarOpen(false)}
+            >
+              <X className="w-8 h-8" />
+            </button>
           </div>
 
           <nav className="space-y-4">
             <button 
-              onClick={() => setActiveTab('learning')}
+              onClick={() => { setActiveTab('learning'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-4 px-6 py-4 font-black uppercase tracking-widest transition-all ${activeTab === 'learning' ? 'bg-white text-black shadow-[8px_8px_0px_0px_rgba(0,255,0,1)]' : 'text-white hover:bg-white/10'}`}
             >
               <LayoutDashboard className="w-6 h-6" />
               My Learning
             </button>
             <button 
-              onClick={() => setActiveTab('materials')}
+              onClick={() => { setActiveTab('materials'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-4 px-6 py-4 font-black uppercase tracking-widest transition-all ${activeTab === 'materials' ? 'bg-white text-black shadow-[8px_8px_0px_0px_rgba(0,255,0,1)]' : 'text-white hover:bg-white/10'}`}
             >
               <FileText className="w-6 h-6" />
               Approved Materials
             </button>
             <button 
-              onClick={() => setActiveTab('exams')}
+              onClick={() => { setActiveTab('exams'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-4 px-6 py-4 font-black uppercase tracking-widest transition-all ${activeTab === 'exams' ? 'bg-white text-black shadow-[8px_8px_0px_0px_rgba(0,255,0,1)]' : 'text-white hover:bg-white/10'}`}
             >
               <BookOpen className="w-6 h-6" />
               Exams
             </button>
             <button 
-              onClick={() => setActiveTab('results')}
+              onClick={() => { setActiveTab('results'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-4 px-6 py-4 font-black uppercase tracking-widest transition-all ${activeTab === 'results' ? 'bg-white text-black shadow-[8px_8px_0px_0px_rgba(0,255,0,1)]' : 'text-white hover:bg-white/10'}`}
             >
               <Star className="w-6 h-6" />
@@ -126,9 +147,15 @@ export const StudentDashboard = () => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white border-l-8 border-black">
         {/* Header */}
-        <header className="h-24 bg-white border-b-8 border-black flex items-center justify-between px-10 shrink-0">
-          <div className="flex items-center gap-6 flex-1">
-            <div className="relative w-full max-w-xl">
+        <header className="h-24 bg-white border-b-8 border-black flex items-center justify-between px-4 lg:px-10 shrink-0">
+          <div className="flex items-center gap-4 lg:gap-6 flex-1">
+            <button 
+              className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={() => setIsSidebarOpen(true)}
+            >
+              <Menu className="w-8 h-8 text-black" />
+            </button>
+            <div className="relative w-full max-w-xl hidden sm:block">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-black" />
               <input 
                 type="text" 
@@ -252,8 +279,8 @@ export const StudentDashboard = () => {
                 <div className="h-4 w-48 bg-[#FF6321] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" />
               </div>
 
-              <div className="bg-white border-4 border-black shadow-[16px_16px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-                <table className="w-full text-left border-collapse">
+              <div className="bg-white border-4 border-black shadow-[16px_16px_0px_0px_rgba(0,0,0,1)] overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[800px]">
                   <thead>
                     <tr className="bg-black text-white">
                       <th className="px-8 py-6 font-black uppercase tracking-widest text-sm">Subject</th>

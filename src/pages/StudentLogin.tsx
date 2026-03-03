@@ -4,6 +4,7 @@ import { GraduationCap, Lock, User, ArrowLeft, Rocket } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { PasswordResetModal } from '../components/PasswordResetModal';
+import { supabaseService } from '../services/supabaseService';
 
 export const StudentLogin = () => {
   const [username, setUsername] = useState('');
@@ -18,7 +19,22 @@ export const StudentLogin = () => {
     setIsLoading(true);
     setError('');
 
-    setTimeout(() => {
+    try {
+      const { user } = await supabaseService.signIn(username, password);
+      
+      if (user) {
+        const profile = await supabaseService.getProfile(user.id);
+        
+        if (profile.role === 'student') {
+          localStorage.setItem('alakara_current_student', JSON.stringify(profile));
+          navigate('/student/dashboard');
+        } else {
+          setError('Unauthorized access. This portal is for Students only.');
+          await supabaseService.signOut();
+        }
+      }
+    } catch (err: any) {
+      // Fallback for demo
       const students = JSON.parse(localStorage.getItem('alakara_students') || '[]');
       const student = students.find((s: any) => s.adm === username);
 
@@ -31,16 +47,15 @@ export const StudentLogin = () => {
       }
 
       if (isDefaultLogin || isValidPassword) {
-        setIsLoading(false);
-        // Store the logged in student for the dashboard
         const loggedInStudent = student || { id: 'S1', name: 'Alice Wanjiku', adm: 'ADM-2024-001', class: 'Form 1' };
         localStorage.setItem('alakara_current_student', JSON.stringify(loggedInStudent));
         navigate('/student/dashboard');
       } else {
-        setError('Check your Admission Number or Password (use one of your names)!');
-        setIsLoading(false);
+        setError(err.message || 'Check your Admission Number or Password (use one of your names)!');
       }
-    }, 1000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

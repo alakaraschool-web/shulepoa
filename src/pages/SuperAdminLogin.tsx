@@ -4,6 +4,7 @@ import { GraduationCap, Lock, User, ArrowLeft, ShieldAlert } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { PasswordResetModal } from '../components/PasswordResetModal';
+import { supabaseService } from '../services/supabaseService';
 
 export const SuperAdminLogin = () => {
   const [username, setUsername] = useState('');
@@ -18,19 +19,29 @@ export const SuperAdminLogin = () => {
     setIsLoading(true);
     setError('');
 
-    // Mock login logic - in a real app, this would verify against Supabase or a secure backend
-    setTimeout(() => {
+    try {
+      const { user } = await supabaseService.signIn(username, password);
+      
+      if (user) {
+        const profile = await supabaseService.getProfile(user.id);
+        
+        if (profile.role === 'super_admin') {
+          navigate('/super-admin/dashboard');
+        } else {
+          setError('Unauthorized access. This portal is for Super Admins only.');
+          await supabaseService.signOut();
+        }
+      }
+    } catch (err: any) {
+      // Fallback for demo
       if (username === 'admin' && password === 'admin123') {
-        // Success
-        console.log('Login successful');
-        // In a real app, you'd set auth state/cookies here
-        setIsLoading(false);
         navigate('/super-admin/dashboard');
       } else {
-        setError('Invalid username or password');
-        setIsLoading(false);
+        setError(err.message || 'Invalid username or password');
       }
-    }, 1000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

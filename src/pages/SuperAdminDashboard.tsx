@@ -44,6 +44,7 @@ import { useState, FormEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { NotificationBell, addNotification } from '../components/NotificationBell';
+import { supabaseService } from '../services/supabaseService';
 
 interface School {
   id: string;
@@ -79,46 +80,30 @@ export const SuperAdminDashboard = () => {
   const [generatedCreds, setGeneratedCreds] = useState<{ principal: string; teacher: string; pass: string } | null>(null);
   const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Pending' | 'Suspended'>('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [schools, setSchools] = useState<School[]>([]);
+  const [examMaterials, setExamMaterials] = useState<ExamMaterial[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
-  const [examMaterials, setExamMaterials] = useState<ExamMaterial[]>(() => {
-    const saved = localStorage.getItem('alakara_exam_materials');
-    if (saved) return JSON.parse(saved);
-    return [
-      {
-        id: 'm1',
-        title: 'KCSE Mathematics Mock 2026',
-        subject: 'Mathematics',
-        schoolName: 'Oakwood Academy',
-        teacherName: 'Mr. Kamau',
-        uploadDate: '2 hours ago',
-        status: 'Pending',
-        fileType: 'PDF',
-        visibility: 'Public'
-      },
-      {
-        id: 'm2',
-        title: 'English Literature Analysis - Blossoms',
-        subject: 'English',
-        schoolName: 'City High School',
-        teacherName: 'Mrs. Anyango',
-        uploadDate: '5 hours ago',
-        status: 'Pending',
-        fileType: 'PDF',
-        visibility: 'Public'
-      },
-      {
-        id: 'm3',
-        title: 'Biology Practical Guide - Form 4',
-        subject: 'Biology',
-        schoolName: 'Global International',
-        teacherName: 'Dr. Omondi',
-        uploadDate: '1 day ago',
-        status: 'Approved',
-        fileType: 'ZIP',
-        visibility: 'Public'
-      }
-    ];
-  });
+  const fetchData = async () => {
+    setIsLoadingData(true);
+    try {
+      const [schoolsData, materialsData] = await Promise.all([
+        supabaseService.getSchools(), // Need to add this
+        supabaseService.getMaterials()
+      ]);
+
+      if (schoolsData.length > 0) setSchools(schoolsData);
+      if (materialsData.length > 0) setExamMaterials(materialsData);
+    } catch (error) {
+      console.error('Error fetching super admin data:', error);
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const [successStories, setSuccessStories] = useState<any[]>(() => {
     const saved = localStorage.getItem('alakara_success_stories');
@@ -156,57 +141,6 @@ export const SuperAdminDashboard = () => {
     localStorage.setItem('alakara_exam_materials', JSON.stringify(examMaterials));
   }, [examMaterials]);
   
-  const [schools, setSchools] = useState<School[]>(() => {
-    const saved = localStorage.getItem('alakara_schools');
-    if (saved) return JSON.parse(saved);
-    // Set default expiry dates for demo: 30 days from now
-    const defaultExpiry = new Date();
-    defaultExpiry.setDate(defaultExpiry.getDate() + 30);
-    const expiryStr = defaultExpiry.toISOString().split('T')[0];
-
-    return [
-      { 
-        id: '1', 
-        name: 'Oakwood Academy', 
-        location: 'Nairobi, KE', 
-        students: '1,200', 
-        status: 'Active', 
-        date: '2 hours ago',
-        principalEmail: 'principal.oakwood@alakara.ac.ke',
-        principalPass: 'P@ss123',
-        teacherEmail: 'staff.oakwood@alakara.ac.ke',
-        teacherPass: 'T@ech456',
-        subscriptionExpiresAt: expiryStr
-      },
-      { 
-        id: '2', 
-        name: 'City High School', 
-        location: 'Mombasa, KE', 
-        students: '2,450', 
-        status: 'Active', 
-        date: '5 hours ago',
-        principalEmail: 'principal.cityhigh@alakara.ac.ke',
-        principalPass: 'P@ss123',
-        teacherEmail: 'staff.cityhigh@alakara.ac.ke',
-        teacherPass: 'T@ech456',
-        subscriptionExpiresAt: expiryStr
-      },
-      { 
-        id: '3', 
-        name: 'Global International', 
-        location: 'Kisumu, KE', 
-        students: '850', 
-        status: 'Pending', 
-        date: '1 day ago',
-        principalEmail: 'principal.global@alakara.ac.ke',
-        principalPass: 'P@ss123',
-        teacherEmail: 'staff.global@alakara.ac.ke',
-        teacherPass: 'T@ech456',
-        subscriptionExpiresAt: expiryStr
-      },
-    ];
-  });
-
   useEffect(() => {
     localStorage.setItem('alakara_schools', JSON.stringify(schools));
   }, [schools]);
@@ -282,6 +216,22 @@ export const SuperAdminDashboard = () => {
       setSuccessStories(successStories.filter(s => s.id !== id));
     }
   };
+
+  useEffect(() => {
+    const loadSchools = () => {
+      const saved = localStorage.getItem('alakara_schools');
+      if (saved) {
+        setSchools(JSON.parse(saved));
+      }
+    };
+    loadSchools();
+    const interval = setInterval(loadSchools, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('alakara_schools', JSON.stringify(schools));
+  }, [schools]);
 
   const stats = [
     { label: 'Total Schools', value: schools.length.toString(), change: '+12%', icon: SchoolIcon, color: 'text-kenya-green', bg: 'bg-kenya-green/10' },

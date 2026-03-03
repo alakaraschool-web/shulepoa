@@ -1,15 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 
-let supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-let supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-// Fallback to provided credentials if env vars are missing or invalid (like "your-supabase-url")
-if (!supabaseUrl || !supabaseUrl.startsWith('http')) {
-  supabaseUrl = 'https://fkluhkewaxdutcryetpn.supabase.co';
+const isValidUrl = (url: string) => {
+  try {
+    return url.startsWith('http');
+  } catch {
+    return false;
+  }
+};
+
+if (!isValidUrl(supabaseUrl) || !supabaseAnonKey) {
+  console.warn('Supabase credentials missing or invalid. Please check your environment variables.');
 }
 
-if (!supabaseAnonKey || supabaseAnonKey === 'your-supabase-anon-key') {
-  supabaseAnonKey = 'sb_publishable_dABXvo2LJ0zndT3a-qLeNg_afNMP0Mj';
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = isValidUrl(supabaseUrl)
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : createClient('https://placeholder.supabase.co', 'placeholder'); // Use placeholder to avoid crash on init
