@@ -1,26 +1,60 @@
+import { supabase } from './supabase';
+
 export const api = {
   async getStore(key: string) {
-    const res = await fetch(`/api/store/${key}`);
-    if (!res.ok) return null;
-    return await res.json();
+    const { data, error } = await supabase
+      .from('store')
+      .select('value')
+      .eq('key', key)
+      .single();
+      
+    if (error || !data) return null;
+    return data.value;
   },
+  
   async setStore(key: string, value: any) {
-    await fetch(`/api/store/${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(value)
-    });
+    const { error } = await supabase
+      .from('store')
+      .upsert({ key, value });
+      
+    if (error) {
+      console.error('Error setting store in Supabase:', error);
+    }
   },
+  
   async getMarks() {
-    const res = await fetch('/api/marks');
-    if (!res.ok) return [];
-    return await res.json();
+    const { data, error } = await supabase
+      .from('marks')
+      .select('*');
+      
+    if (error || !data) return [];
+    return data;
   },
+  
   async upsertMarks(marks: any[]) {
-    await fetch('/api/marks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(marks)
-    });
+    // Filter out deleted marks and delete them from Supabase
+    const toDelete = marks.filter(m => m._delete).map(m => m.id);
+    const toUpsert = marks.filter(m => !m._delete).map(m => ({
+      id: m.id,
+      examId: m.examId,
+      studentId: m.studentId,
+      subject: m.subject,
+      assessments: m.assessments,
+      total: m.total,
+      percentage: m.percentage,
+      grade: m.grade,
+      updatedAt: m.updatedAt
+    }));
+
+    if (toDelete.length > 0) {
+      await supabase.from('marks').delete().in('id', toDelete);
+    }
+
+    if (toUpsert.length > 0) {
+      const { error } = await supabase.from('marks').upsert(toUpsert);
+      if (error) {
+        console.error('Error upserting marks in Supabase:', error);
+      }
+    }
   }
 };
