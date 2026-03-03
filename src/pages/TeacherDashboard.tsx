@@ -97,37 +97,20 @@ export const TeacherDashboard = () => {
     examId: '',
     term: 'Term 1'
   });
-  const [currentTeacher, setCurrentTeacher] = useState<any>(null);
-  const [isLoadingData, setIsLoadingData] = useState(true);
-
-  const fetchData = async (schoolId: string) => {
-    setIsLoadingData(true);
-    try {
-      const [studentsData, examsData] = await Promise.all([
-        supabaseService.getStudents(schoolId),
-        supabaseService.getExams(schoolId)
-      ]);
-
-      if (studentsData.length > 0) setAllStudents(studentsData);
-      if (examsData.length > 0) setExams(examsData);
-    } catch (error) {
-      console.error('Error fetching data from Supabase:', error);
-    } finally {
-      setIsLoadingData(false);
-    }
-  };
-
-  useEffect(() => {
-    const teacher = JSON.parse(localStorage.getItem('alakara_current_teacher') || '{}');
-    if (teacher && teacher.id) {
-      setCurrentTeacher(teacher);
-      // For now, assuming teacher belongs to a school
-      const schoolId = teacher.school_id || '1'; 
-      fetchData(schoolId);
-    } else {
-      navigate('/teacher-login');
-    }
-  }, []);
+  const [currentTeacher, setCurrentTeacher] = useState<any>(() => {
+    const saved = localStorage.getItem('alakara_current_teacher');
+    if (saved) return JSON.parse(saved);
+    // Fallback for demo
+    return { 
+      id: '1',
+      name: 'John Kamau', 
+      role: 'Head of Science', 
+      assignments: [
+        { classId: '1', streamId: 's1', subject: 'Science' },
+        { classId: '5', streamId: '', subject: 'Science' }
+      ]
+    };
+  });
 
   const [classes, setClasses] = useState<any[]>(() => {
     const saved = localStorage.getItem('alakara_classes');

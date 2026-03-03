@@ -4,7 +4,6 @@ import { GraduationCap, Lock, User, ArrowLeft, ShieldCheck } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { PasswordResetModal } from '../components/PasswordResetModal';
-import { supabaseService } from '../services/supabaseService';
 
 export const PrincipalLogin = () => {
   const [email, setEmail] = useState('');
@@ -19,25 +18,8 @@ export const PrincipalLogin = () => {
     setIsLoading(true);
     setError('');
 
-    try {
-      const { user } = await supabaseService.signIn(email, password);
-      
-      if (user) {
-        // Fetch profile to check role
-        const profile = await supabaseService.getProfile(user.id);
-        
-        if (profile.role === 'principal' || profile.role === 'school_admin') {
-          // Fetch school settings
-          const schoolSettings = await supabaseService.getSchoolSettings(user.id); // Assuming school_id is user.id for principal
-          localStorage.setItem('alakara_current_school', JSON.stringify(schoolSettings));
-          navigate('/principal/dashboard');
-        } else {
-          setError('Unauthorized access. This portal is for Principals only.');
-          await supabaseService.signOut();
-        }
-      }
-    } catch (err: any) {
-      // Fallback for demo if Supabase is not configured
+    // Mock login logic
+    setTimeout(() => {
       const savedSchools = localStorage.getItem('alakara_schools');
       const schools = savedSchools ? JSON.parse(savedSchools) : [];
       const schoolByCreds = schools.find((s: any) => s.principalEmail === email && s.principalPass === password);
@@ -47,15 +29,15 @@ export const PrincipalLogin = () => {
       const staffPrincipal = staff.find((s: any) => s.email === email && s.password === password && s.role === 'Principal');
 
       if (schoolByCreds || staffPrincipal) {
-        const school = schoolByCreds || schools.find((s: any) => s.id === '1');
+        const school = schoolByCreds || schools.find((s: any) => s.id === '1'); // Default to first school if staff login
         localStorage.setItem('alakara_current_school', JSON.stringify(school));
+        setIsLoading(false);
         navigate('/principal/dashboard');
       } else {
-        setError(err.message || 'Invalid principal credentials or school not registered');
+        setError('Invalid principal credentials or school not registered');
+        setIsLoading(false);
       }
-    } finally {
-      setIsLoading(false);
-    }
+    }, 1000);
   };
 
   return (

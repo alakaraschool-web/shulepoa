@@ -4,7 +4,6 @@ import { GraduationCap, Lock, User, ArrowLeft, BookOpen } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { PasswordResetModal } from '../components/PasswordResetModal';
-import { supabaseService } from '../services/supabaseService';
 
 export const TeacherLogin = () => {
   const [username, setUsername] = useState('');
@@ -23,31 +22,12 @@ export const TeacherLogin = () => {
     setIsLoading(true);
     setError('');
 
-    try {
-      const { user } = await supabaseService.signIn(username, password);
-      
-      if (user) {
-        const profile = await supabaseService.getProfile(user.id);
-        
-        if (profile.role === 'teacher') {
-          if (profile.must_change_password) { // Assuming this field exists in DB
-            setPendingTeacher(profile);
-            setShowPasswordChange(true);
-          } else {
-            localStorage.setItem('alakara_current_teacher', JSON.stringify(profile));
-            navigate('/teacher/dashboard');
-          }
-        } else {
-          setError('Unauthorized access. This portal is for Teachers only.');
-          await supabaseService.signOut();
-        }
-      }
-    } catch (err: any) {
-      // Fallback for demo
+    setTimeout(() => {
       const staff = JSON.parse(localStorage.getItem('alakara_staff') || '[]');
       const teacher = staff.find((s: any) => s.username === username && s.password === password);
 
       if (teacher || ((username === 'teacher' || username === 'teacher@alakara.ac.ke') && password === 'teacher123')) {
+        setIsLoading(false);
         const currentTeacher = teacher || { name: 'Teacher', role: 'Class Teacher', assignedClasses: ['Form 1', 'Grade 7'], username: 'teacher@alakara.ac.ke' };
         
         if (currentTeacher.mustChangePassword) {
@@ -58,11 +38,10 @@ export const TeacherLogin = () => {
           navigate('/teacher/dashboard');
         }
       } else {
-        setError(err.message || 'Invalid teacher credentials');
+        setError('Invalid teacher credentials');
+        setIsLoading(false);
       }
-    } finally {
-      setIsLoading(false);
-    }
+    }, 1000);
   };
 
   const handlePasswordChange = (e: React.FormEvent) => {

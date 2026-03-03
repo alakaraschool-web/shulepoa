@@ -77,36 +77,6 @@ import { Database } from '../lib/database.types';
 export const PrincipalDashboard = () => {
   const navigate = useNavigate();
   const [school, setSchool] = useState<any>(null);
-  const [isLoadingData, setIsLoadingData] = useState(true);
-
-  const fetchData = async (schoolId: string) => {
-    setIsLoadingData(true);
-    try {
-      const [studentsData, examsData, classesData, settingsData] = await Promise.all([
-        supabaseService.getStudents(schoolId),
-        supabaseService.getExams(schoolId),
-        supabaseService.getClasses(schoolId),
-        supabaseService.getSchoolSettings(schoolId)
-      ]);
-
-      if (studentsData.length > 0) setStudents(studentsData);
-      if (examsData.length > 0) setExams(examsData);
-      if (classesData.length > 0) setClasses(classesData);
-      if (settingsData) setSchool(settingsData);
-    } catch (error) {
-      console.error('Error fetching data from Supabase:', error);
-    } finally {
-      setIsLoadingData(false);
-    }
-  };
-
-  useEffect(() => {
-    const currentSchool = JSON.parse(localStorage.getItem('alakara_current_school') || '{}');
-    if (currentSchool && currentSchool.id) {
-      setSchool(currentSchool);
-      fetchData(currentSchool.id);
-    }
-  }, []);
   const [isSuspended, setIsSuspended] = useState(false);
   const [daysToExpiry, setDaysToExpiry] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'staff' | 'students' | 'academic' | 'settings' | 'classes' | 'users'>('dashboard');
@@ -1001,37 +971,21 @@ export const PrincipalDashboard = () => {
     }
   };
 
-  const handleAddStudent = async (e: FormEvent) => {
+  const handleAddStudent = (e: FormEvent) => {
     e.preventDefault();
-    try {
-      if (editingStudent) {
-        const updatedStudent = { ...editingStudent, ...newStudent };
-        await supabaseService.updateStudent(editingStudent.id, {
-          name: newStudent.name,
-          adm: newStudent.adm,
-          class: newStudent.class,
-          gender: newStudent.gender
-        });
-        setStudents(students.map(s => s.id === editingStudent.id ? updatedStudent : s));
-        setEditingStudent(null);
-      } else {
-        const studentData = {
-          name: newStudent.name,
-          adm: newStudent.adm,
-          class: newStudent.class,
-          gender: newStudent.gender,
-          school_id: school.id,
-          status: 'Active'
-        };
-        const createdStudent = await supabaseService.createStudent(studentData);
-        setStudents([...students, createdStudent]);
-      }
-      setNewStudent({ name: '', adm: '', class: 'Form 1', streamId: '', gender: 'Male', profile_image: null });
-      setShowAddStudentModal(false);
-    } catch (error) {
-      console.error('Error saving student:', error);
-      alert('Failed to save student. Please try again.');
+    if (editingStudent) {
+      setStudents(students.map(s => s.id === editingStudent.id ? { ...editingStudent, ...newStudent } : s));
+      setEditingStudent(null);
+    } else {
+      const student = {
+        id: Math.random().toString(36).substr(2, 9),
+        ...newStudent,
+        status: 'Active'
+      };
+      setStudents([...students, student]);
     }
+    setNewStudent({ name: '', adm: '', class: 'Form 1', streamId: '', gender: 'Male', profile_image: null });
+    setShowAddStudentModal(false);
   };
 
   const openEditStudent = (student: any) => {
@@ -1281,26 +1235,19 @@ export const PrincipalDashboard = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
-  const handleCreateExam = async (e: FormEvent) => {
+  const handleCreateExam = (e: FormEvent) => {
     e.preventDefault();
-    try {
-      const examData = {
-        title: newExam.title,
-        term: newExam.term,
-        year: newExam.year,
-        school_id: school.id,
-        locked: false,
-        weighting: 100
-      };
-      const createdExam = await supabaseService.createExam(examData);
-      setExams([createdExam, ...exams]);
-      setNewExam({ title: '', term: 'Term 1', year: '2026', classes: [], subjects: [], startDate: '', endDate: '' });
-      setAcademicSubTab('overview');
-      alert('Exam created successfully! It is now visible to teachers.');
-    } catch (error) {
-      console.error('Error creating exam:', error);
-      alert('Failed to create exam. Please try again.');
-    }
+    const exam = {
+      id: Math.random().toString(36).substr(2, 9),
+      ...newExam,
+      status: 'Active', // Active means teachers can enter marks
+      createdAt: new Date().toISOString(),
+      schoolId: school.id
+    };
+    setExams([exam, ...exams]);
+    setNewExam({ title: '', term: 'Term 1', year: '2026', classes: [], subjects: [], startDate: '', endDate: '' });
+    setAcademicSubTab('overview');
+    alert('Exam created successfully! It is now visible to teachers.');
   };
 
   const [logs, setLogs] = useState<any[]>(() => {

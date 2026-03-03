@@ -2,38 +2,6 @@ import { supabase } from '../lib/supabase';
 import { Database } from '../lib/database.types';
 
 export const supabaseService = {
-  // Auth
-  async signUp(email: string, password: string, metadata: any) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: metadata
-      }
-    });
-    if (error) throw error;
-    return data;
-  },
-
-  async signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-    if (error) throw error;
-    return data;
-  },
-
-  async signOut() {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-  },
-
-  async getCurrentUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user;
-  },
-
   // Profiles
   async getProfile(id: string) {
     const { data, error } = await supabase
@@ -101,81 +69,7 @@ export const supabaseService = {
     return data;
   },
 
-  async getSchools() {
-    const { data, error } = await supabase
-      .from('school_settings')
-      .select('*');
-    if (error) throw error;
-    return data;
-  },
-
-  async getClasses(schoolId: string) {
-    const { data, error } = await supabase
-      .from('classes')
-      .select('*')
-      .eq('school_id', schoolId);
-    if (error) throw error;
-    return data;
-  },
-
-  async getExamsByClass(className: string) {
-    const { data, error } = await supabase
-      .from('exams')
-      .select('*')
-      .eq('class_id', className); // Assuming class_id stores class name for now or we need a join
-    if (error) throw error;
-    return data;
-  },
-
-  async getMarksByStudent(studentId: string) {
-    const { data, error } = await supabase
-      .from('marks')
-      .select('*, exams!inner(*)')
-      .eq('student_id', studentId);
-    if (error) throw error;
-    return data;
-  },
-
-  async getMarksBySchool(schoolId: string) {
-    const { data, error } = await supabase
-      .from('marks')
-      .select('*, students!inner(*)')
-      .eq('students.school_id', schoolId);
-    if (error) throw error;
-    return data;
-  },
-
-  async getMaterials() {
-    // Assuming a materials table exists or using a generic fetch
-    const { data, error } = await supabase
-      .from('exam_materials') // Need to ensure this table exists
-      .select('*');
-    if (error) return []; // Return empty if table doesn't exist yet
-    return data;
-  },
-
   // Students
-  async createStudent(student: any) {
-    const { data, error } = await supabase
-      .from('students')
-      .insert(student)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
-
-  async updateStudent(id: string, student: any) {
-    const { data, error } = await supabase
-      .from('students')
-      .update(student)
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
-
   async getStudents(schoolId: string) {
     const { data, error } = await supabase
       .from('students')

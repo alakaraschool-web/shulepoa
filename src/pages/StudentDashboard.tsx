@@ -17,7 +17,6 @@ import {
 import { NotificationBell } from '../components/NotificationBell';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
-import { supabaseService } from '../services/supabaseService';
 
 export const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -29,36 +28,42 @@ export const StudentDashboard = () => {
   const [activeTab, setActiveTab] = useState<'learning' | 'exams' | 'results' | 'materials'>('learning');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const [currentStudent, setCurrentStudent] = useState<any>(null);
-  const [isLoadingData, setIsLoadingData] = useState(true);
-
-  const fetchData = async (studentId: string, studentClass: string) => {
-    setIsLoadingData(true);
-    try {
-      const [materialsData, examsData, marksData] = await Promise.all([
-        supabaseService.getMaterials(), // Need to add this
-        supabaseService.getExamsByClass(studentClass), // Need to add this
-        supabaseService.getMarksByStudent(studentId)
-      ]);
-
-      setMaterials(materialsData.filter((m: any) => m.status === 'Approved' && m.visibility === 'Public'));
-      setExams(examsData.filter((e: any) => e.locked)); // Assuming locked means published for students
-      setMarks(marksData);
-    } catch (error) {
-      console.error('Error fetching student data:', error);
-    } finally {
-      setIsLoadingData(false);
-    }
-  };
+  const [currentStudent, setCurrentStudent] = useState<any>(() => {
+    const saved = localStorage.getItem('alakara_current_student');
+    return saved ? JSON.parse(saved) : { id: 'S1', name: 'Alice Wanjiku', adm: 'ADM-2024-001', class: 'Form 1' };
+  });
 
   useEffect(() => {
-    const student = JSON.parse(localStorage.getItem('alakara_current_student') || '{}');
-    if (student && student.id) {
-      setCurrentStudent(student);
-      fetchData(student.id, student.class);
-    } else {
-      navigate('/student-login');
-    }
+    const loadData = () => {
+      const savedMaterials = localStorage.getItem('alakara_exam_materials');
+      if (savedMaterials) {
+        const allMaterials = JSON.parse(savedMaterials);
+        setMaterials(allMaterials.filter((m: any) => m.status === 'Approved' && m.visibility === 'Public'));
+      }
+
+      const savedExams = localStorage.getItem('alakara_exams');
+      if (savedExams) {
+        setExams(JSON.parse(savedExams).filter((e: any) => e.published && e.classes.includes(currentStudent.class)));
+      }
+
+      const savedMarks = localStorage.getItem('alakara_marks');
+      if (savedMarks) {
+        const allExams = JSON.parse(localStorage.getItem('alakara_exams') || '[]');
+        setMarks(JSON.parse(savedMarks).filter((m: any) => {
+          const exam = allExams.find((e: any) => e.id === m.examId);
+          return m.studentId === currentStudent.id && exam?.published;
+        }));
+      }
+
+      const savedStaff = localStorage.getItem('alakara_staff');
+      if (savedStaff) {
+        setStaff(JSON.parse(savedStaff));
+      }
+    };
+
+    loadData();
+    const interval = setInterval(loadData, 2000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleLogout = () => {
