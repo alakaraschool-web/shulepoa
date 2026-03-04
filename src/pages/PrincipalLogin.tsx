@@ -22,14 +22,9 @@ export const PrincipalLogin = () => {
     setTimeout(() => {
       const savedSchools = localStorage.getItem('alakara_schools');
       const schools = savedSchools ? JSON.parse(savedSchools) : [];
-      const schoolByCreds = schools.find((s: any) => s.principalEmail === email && s.principalPass === password);
+      const school = schools.find((s: any) => s.principalEmail === email && s.principalPass === password);
 
-      const savedStaff = localStorage.getItem('alakara_staff');
-      const staff = savedStaff ? JSON.parse(savedStaff) : [];
-      const staffPrincipal = staff.find((s: any) => s.email === email && s.password === password && s.role === 'Principal');
-
-      if (schoolByCreds || staffPrincipal) {
-        const school = schoolByCreds || schools.find((s: any) => s.id === '1'); // Default to first school if staff login
+      if (school) {
         localStorage.setItem('alakara_current_school', JSON.stringify(school));
         setIsLoading(false);
         navigate('/principal/dashboard');
@@ -160,9 +155,6 @@ export const PrincipalLogin = () => {
         <p className="mt-8 text-center text-xs text-gray-500 tracking-widest uppercase">
           &copy; 2026 Alakara KE Leadership Portal
         </p>
-        <div className="mt-8 text-center text-gray-400 text-sm">
-          New to Alakara? <Link to="/register-school" className="text-kenya-green font-bold hover:underline">Register your school here</Link>
-        </div>
       </div>
     </div>
   );

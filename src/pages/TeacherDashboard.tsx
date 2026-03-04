@@ -23,13 +23,8 @@ import {
   FileSpreadsheet as ExcelIcon,
   Users,
   Plus,
-  UserPlus,
   Trash2,
-  X,
-  Menu,
-  Edit3,
-  Printer,
-  Library
+  X
 } from 'lucide-react';
 import { NotificationBell, addNotification } from '../components/NotificationBell';
 import { useNavigate } from 'react-router-dom';
@@ -47,94 +42,55 @@ import {
   Legend
 } from 'recharts';
 import * as XLSX from 'xlsx';
-
-import { supabaseService } from '../services/supabaseService';
-import { Database } from '../lib/database.types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export const TeacherDashboard = () => {
   const navigate = useNavigate();
-  const [exams, setExams] = useState<any[]>(() => {
-    const saved = localStorage.getItem('alakara_exams');
-    if (saved) return JSON.parse(saved);
-    return [
-      { 
-        id: 'e1', 
-        title: 'End of Term 1 Exams', 
-        term: 'Term 1', 
-        year: '2026', 
-        classes: ['Form 1', 'Form 2', 'Form 3', 'Form 4'], 
-        subjects: ['Mathematics', 'English', 'Science'],
-        status: 'Active',
-        published: false
-      },
-      { 
-        id: 'e2', 
-        title: 'Mid-Term Assessment', 
-        term: 'Term 1', 
-        year: '2026', 
-        classes: ['Form 1', 'Grade 7'], 
-        subjects: ['Mathematics', 'Science'],
-        status: 'Active',
-        published: false
-      }
-    ];
-  });
+  const [exams, setExams] = useState<any[]>([]);
   const [activeExam, setActiveExam] = useState<any>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [marks, setMarks] = useState<any[]>(() => {
     const saved = localStorage.getItem('alakara_marks');
     return saved ? JSON.parse(saved) : [];
   });
   const [currentMarks, setCurrentMarks] = useState<any>({});
-  const [activeTab, setActiveTab] = useState<'exams' | 'analysis' | 'class-management' | 'materials' | 'profile'>('exams');
-  const [materialsSubTab, setMaterialsSubTab] = useState<'public' | 'my-materials'>('my-materials');
-  const [entryConfig, setEntryConfig] = useState({
-    classId: '',
-    streamId: '',
-    subject: '',
-    examId: '',
-    term: 'Term 1'
-  });
+  const [activeTab, setActiveTab] = useState<'exams' | 'analysis' | 'class-management' | 'materials' | 'profile' | 'assignments'>('exams');
   const [currentTeacher, setCurrentTeacher] = useState<any>(() => {
     const saved = localStorage.getItem('alakara_current_teacher');
-    if (saved) return JSON.parse(saved);
-    // Fallback for demo
-    return { 
-      id: '1',
-      name: 'John Kamau', 
-      role: 'Head of Science', 
-      assignments: [
-        { classId: '1', streamId: 's1', subject: 'Science' },
-        { classId: '5', streamId: '', subject: 'Science' }
-      ]
-    };
+    return saved ? JSON.parse(saved) : { name: 'Teacher', role: 'Class Teacher', assignedClasses: ['Form 1', 'Grade 7'] };
   });
 
-  const [classes, setClasses] = useState<any[]>(() => {
-    const saved = localStorage.getItem('alakara_classes');
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: '1', name: 'Form 1', teacherId: '1', capacity: 40 },
-      { id: '2', name: 'Form 2', teacherId: '2', capacity: 40 },
-      { id: '3', name: 'Form 3', teacherId: '3', capacity: 40 },
-      { id: '4', name: 'Form 4', teacherId: '', capacity: 40 },
-      { id: '5', name: 'Grade 7', teacherId: '', capacity: 40 },
-      { id: '6', name: 'Grade 8', teacherId: '', capacity: 40 },
-    ];
+  const [showBulkPreview, setShowBulkPreview] = useState(false);
+  const [bulkPreviewData, setBulkPreviewData] = useState<any>(null);
+
+  const [assignments, setAssignments] = useState<any[]>(() => {
+    const saved = localStorage.getItem('alakara_assignments');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
+  const [submissions, setSubmissions] = useState<any[]>(() => {
+    const saved = localStorage.getItem('alakara_submissions');
+    return saved ? JSON.parse(saved) : [];
   });
 
-  const [streams, setStreams] = useState<any[]>(() => {
-    const saved = localStorage.getItem('alakara_streams');
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: 's1', name: 'North', classId: '1' },
-      { id: 's2', name: 'South', classId: '1' },
-      { id: 's3', name: 'East', classId: '2' },
-      { id: 's4', name: 'West', classId: '2' },
-    ];
+  const [showAddAssignmentModal, setShowAddAssignmentModal] = useState(false);
+  const [newAssignment, setNewAssignment] = useState({
+    title: '',
+    description: '',
+    dueDate: '',
+    maxMarks: 100,
+    class: '',
+    subject: ''
   });
+  const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
+
+  useEffect(() => {
+    localStorage.setItem('alakara_assignments', JSON.stringify(assignments));
+  }, [assignments]);
+
+  useEffect(() => {
+    localStorage.setItem('alakara_submissions', JSON.stringify(submissions));
+  }, [submissions]);
 
   const [examMaterials, setExamMaterials] = useState<any[]>(() => {
     const saved = localStorage.getItem('alakara_exam_materials');
@@ -145,8 +101,7 @@ export const TeacherDashboard = () => {
   const [newMaterial, setNewMaterial] = useState({
     title: '',
     subject: 'Mathematics',
-    fileType: 'PDF' as 'PDF' | 'DOCX' | 'ZIP',
-    file: null as File | null
+    fileType: 'PDF' as 'PDF' | 'DOCX' | 'ZIP'
   });
 
   useEffect(() => {
@@ -155,18 +110,10 @@ export const TeacherDashboard = () => {
 
   const handleAddMaterial = (e: FormEvent) => {
     e.preventDefault();
-    if (!newMaterial.file) {
-      alert('Please select a file to upload.');
-      return;
-    }
     const material = {
       id: Math.random().toString(36).substr(2, 9),
-      title: newMaterial.title,
-      subject: newMaterial.subject,
-      fileType: newMaterial.fileType,
-      fileName: newMaterial.file.name,
-      fileSize: (newMaterial.file.size / 1024).toFixed(1) + ' KB',
-      schoolName: 'Alakara Academy',
+      ...newMaterial,
+      schoolName: 'Alakara Academy', // Mock school name
       teacherName: currentTeacher.name,
       uploadDate: new Date().toLocaleDateString(),
       status: 'Pending',
@@ -174,7 +121,7 @@ export const TeacherDashboard = () => {
     };
     setExamMaterials([material, ...examMaterials]);
     setShowAddMaterialModal(false);
-    setNewMaterial({ title: '', subject: 'Mathematics', fileType: 'PDF', file: null });
+    setNewMaterial({ title: '', subject: 'Mathematics', fileType: 'PDF' });
     alert('Material uploaded and sent for approval!');
   };
 
@@ -184,9 +131,17 @@ export const TeacherDashboard = () => {
     }
   };
 
-  const [teacherRole] = useState<string>(currentTeacher.role || 'Teacher');
+  const [assignedClasses] = useState<string[]>(currentTeacher.assignedClasses || ['Form 1', 'Grade 7']);
+  const [teacherRole] = useState<'Teacher' | 'Class Teacher'>(currentTeacher.role === 'Class Teacher' ? 'Class Teacher' : 'Teacher');
+  const [managedClass] = useState<string>(assignedClasses[0] || 'Form 1');
   const [selectedAnalysisExamId, setSelectedAnalysisExamId] = useState('');
   const [selectedAnalysisClass, setSelectedAnalysisClass] = useState('All');
+  const [selectedEntryClass, setSelectedEntryClass] = useState('');
+  const [selectedEntryStream, setSelectedEntryStream] = useState('');
+  const [selectedEntrySubject, setSelectedEntrySubject] = useState('');
+  const [selectedEntryStudent, setSelectedEntryStudent] = useState<any>(null);
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [entryMode, setEntryMode] = useState<'individual' | 'bulk'>('individual');
   const [analysisOptions, setAnalysisOptions] = useState({
     showGrades: true,
     showRank: true
@@ -195,16 +150,11 @@ export const TeacherDashboard = () => {
   const [assessmentCategories] = useState<any[]>(() => {
     const saved = localStorage.getItem('alakara_assessment_categories');
     return saved ? JSON.parse(saved) : [
-      { id: 'final', name: 'Score', maxScore: 100 },
+      { id: 'cat1', name: 'CAT 1', maxScore: 20 },
+      { id: 'cat2', name: 'CAT 2', maxScore: 20 },
+      { id: 'final', name: 'Final Exam', maxScore: 60 },
     ];
   });
-
-  const assignedClasses = Array.from(new Set(currentTeacher.assignments.map((a: any) => {
-    const cls = classes.find(c => c.id === a.classId);
-    return cls ? cls.name : '';
-  }).filter(Boolean))) as string[];
-  
-  const managedClass = classes.find(c => c.teacherId === currentTeacher.id);
 
   const [learningAreas] = useState<string[]>(() => {
     const saved = localStorage.getItem('alakara_learning_areas');
@@ -232,45 +182,24 @@ export const TeacherDashboard = () => {
   // Load students from localStorage if available
   const [allStudents, setAllStudents] = useState<any[]>(() => {
     const saved = localStorage.getItem('alakara_students');
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: 'S1', name: 'Alice Wanjiku', adm: 'ADM-2024-001', class: 'Form 1', streamId: 's1' },
-      { id: 'S2', name: 'Bob Otieno', adm: 'ADM-2024-002', class: 'Form 2', streamId: 's3' },
-      { id: 'S3', name: 'Charlie Mutua', adm: 'ADM-2024-003', class: 'Form 1', streamId: 's2' },
-      { id: 'S4', name: 'Diana Anyango', adm: 'ADM-2024-004', class: 'Form 2', streamId: 's4' },
-      { id: 'S5', name: 'Evans Kiprop', adm: 'ADM-2024-005', class: 'Form 1', streamId: 's1' },
+    return saved ? JSON.parse(saved) : [
+      { id: 'S1', name: 'Alice Wanjiku', adm: 'ADM-2024-001', class: 'Form 1' },
+      { id: 'S2', name: 'Bob Otieno', adm: 'ADM-2024-002', class: 'Form 2' },
+      { id: 'S3', name: 'Charlie Mutua', adm: 'ADM-2024-003', class: 'Form 1' },
+      { id: 'S4', name: 'Diana Anyango', adm: 'ADM-2024-004', class: 'Form 2' },
+      { id: 'S5', name: 'Evans Kiprop', adm: 'ADM-2024-005', class: 'Form 1' },
     ];
   });
 
   useEffect(() => {
-    const loadData = () => {
-      const savedExams = localStorage.getItem('alakara_exams');
-      if (savedExams) {
-        setExams(JSON.parse(savedExams));
-      }
-
-      const savedStudents = localStorage.getItem('alakara_students');
-      if (savedStudents) {
-        setAllStudents(JSON.parse(savedStudents));
-      }
-
-      const savedClasses = localStorage.getItem('alakara_classes');
-      if (savedClasses) {
-        setClasses(JSON.parse(savedClasses));
-      }
-
-      const savedStreams = localStorage.getItem('alakara_streams');
-      if (savedStreams) {
-        setStreams(JSON.parse(savedStreams));
-      }
-
-      const savedTeacher = localStorage.getItem('alakara_current_teacher');
-      if (savedTeacher) {
-        setCurrentTeacher(JSON.parse(savedTeacher));
+    const loadExams = () => {
+      const saved = localStorage.getItem('alakara_exams');
+      if (saved) {
+        setExams(JSON.parse(saved));
       }
     };
-    loadData();
-    const interval = setInterval(loadData, 2000);
+    loadExams();
+    const interval = setInterval(loadExams, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -282,41 +211,28 @@ export const TeacherDashboard = () => {
     localStorage.setItem('alakara_students', JSON.stringify(allStudents));
   }, [allStudents]);
 
-  const filteredStudents = activeExam ? allStudents.filter(s => {
-    const selectedClass = classes.find(c => c.id === entryConfig.classId);
-    const matchesClass = !entryConfig.classId || s.class?.trim() === selectedClass?.name?.trim();
-    const matchesStream = !entryConfig.streamId || s.streamId === entryConfig.streamId;
-    const classInExam = activeExam.classes.some((c: string) => c.trim() === s.class?.trim());
-    const classInAssignments = assignedClasses.some((c: string) => c.trim() === s.class?.trim());
-    return matchesClass && matchesStream && classInExam && classInAssignments;
-  }) : [];
+  useEffect(() => {
+    if (activeExam) {
+      if (entryMode === 'individual' && selectedEntryStudent) {
+        const examMarks = marks.filter(m => m.examId === activeExam.id && m.studentId === selectedEntryStudent.id);
+        const marksMap: any = {};
+        examMarks.forEach(m => {
+          marksMap[m.subject] = m.assessments || {};
+        });
+        setCurrentMarks(marksMap);
+      } else if (entryMode === 'bulk' && selectedEntrySubject && selectedEntryClass) {
+        const examMarks = marks.filter(m => m.examId === activeExam.id && m.subject === selectedEntrySubject);
+        const marksMap: any = {};
+        examMarks.forEach(m => {
+          marksMap[m.studentId] = m.assessments || {};
+        });
+        setCurrentMarks(marksMap);
+      }
+    }
+  }, [activeExam, selectedEntrySubject, selectedEntryClass, selectedEntryStudent, entryMode, marks]);
 
   const [newStudent, setNewStudent] = useState({ name: '', adm: '' });
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
-  const [showImportPreview, setShowImportPreview] = useState(false);
-  const [importPreviewData, setImportPreviewData] = useState<any[]>([]);
-  const [importErrors, setImportErrors] = useState<string[]>([]);
-  const [profilePhoto, setProfilePhoto] = useState<string | null>(currentTeacher.avatar_url || null);
-  const [publicResources, setPublicResources] = useState<any[]>([]);
-  const [isLoadingResources, setIsLoadingResources] = useState(false);
-  const [isFetchingStudents, setIsFetchingStudents] = useState(false);
-
-  useEffect(() => {
-    const fetchResources = async () => {
-      setIsLoadingResources(true);
-      try {
-        const resources = await supabaseService.getPublicResources();
-        setPublicResources(resources || []);
-      } catch (error) {
-        console.error('Error fetching resources:', error);
-      } finally {
-        setIsLoadingResources(false);
-      }
-    };
-    if (activeTab === 'materials') {
-      fetchResources();
-    }
-  }, [activeTab]);
 
   const handleAddStudent = (e: FormEvent) => {
     e.preventDefault();
@@ -356,36 +272,9 @@ export const TeacherDashboard = () => {
     navigate('/teacher-login');
   };
 
-  const startMarkEntry = async (exam: any) => {
-    if (!entryConfig.classId || !entryConfig.subject) {
-      alert('Please select BOTH a Class and a Subject in the configuration card above before entering marks.');
-      return;
-    }
-    
-    const selectedClass = classes.find(c => c.id === entryConfig.classId);
-    if (selectedClass && !exam.classes.includes(selectedClass.name)) {
-      alert(`The selected class (${selectedClass.name}) is not part of this examination (${exam.title}). Please select a valid class.`);
-      return;
-    }
-
-    if (selectedClass && !assignedClasses.includes(selectedClass.name)) {
-      alert(`You are not assigned to teach ${selectedClass.name}. Please select one of your assigned classes.`);
-      return;
-    }
-    
-    setIsFetchingStudents(true);
-    // Simulate fetching student names from the database
-    await new Promise(resolve => setTimeout(resolve, 600));
-    
+  const startMarkEntry = (exam: any) => {
     setActiveExam(exam);
-    // Load existing marks for this exam and subject if any
-    const examMarks = marks.filter(m => m.examId === exam.id && m.subject === entryConfig.subject);
-    const marksMap: any = {};
-    examMarks.forEach(m => {
-      marksMap[m.studentId] = m.assessments || {};
-    });
-    setCurrentMarks(marksMap);
-    setIsFetchingStudents(false);
+    // Marks will be loaded by useEffect when class and subject are selected
   };
 
   const handleMarkChange = (studentId: string, categoryId: string, score: string) => {
@@ -408,63 +297,104 @@ export const TeacherDashboard = () => {
     // Auto-save logic could go here, but for now we'll rely on the manual save or a debounced effect
   };
 
-  const saveMarks = (isFinal: boolean = false) => {
+  const saveMarks = () => {
     if (activeExam.locked) {
       alert('This exam is locked and cannot be edited.');
       return;
     }
-
-    if (isFinal && !window.confirm('Are you sure you want to submit these marks as final? You will not be able to edit them again unless the Principal unlocks them.')) {
-      return;
-    }
-
-    const subject = entryConfig.subject || 'Mathematics';
-    const newMarks = [...marks.filter(m => !(m.examId === activeExam.id && m.subject === subject))];
     
-    Object.entries(currentMarks).forEach(([studentId, assessments]: [string, any]) => {
-      let total = 0;
-      Object.values(assessments).forEach(val => {
-        if (val) total += parseFloat(val as string);
+    if (entryMode === 'individual') {
+      if (!selectedEntryStudent) {
+        alert('Please select a student to save marks.');
+        return;
+      }
+
+      const newMarks = [...marks.filter(m => m.examId !== activeExam.id || m.studentId !== selectedEntryStudent.id)];
+      
+      Object.entries(currentMarks).forEach(([subject, assessments]: [string, any]) => {
+        let total = 0;
+        Object.values(assessments).forEach(val => {
+          if (val) total += parseFloat(val as string);
+        });
+
+        const percentage = total; // Since total max is 100 in default config
+
+        // Find grade
+        const gradeObj = gradingSystem.find(g => percentage >= g.min && percentage <= g.max);
+        const grade = gradeObj ? gradeObj.grade : 'E';
+
+        newMarks.push({
+          id: `${activeExam.id}-${selectedEntryStudent.id}-${subject}`,
+          examId: activeExam.id,
+          studentId: selectedEntryStudent.id,
+          subject,
+          assessments,
+          total,
+          percentage,
+          grade,
+          updatedAt: new Date().toISOString()
+        });
       });
 
-      const percentage = total; 
-
-      // Find grade
-      const gradeObj = gradingSystem.find(g => percentage >= g.min && percentage <= g.max);
-      const grade = gradeObj ? gradeObj.grade : 'E';
-
-      newMarks.push({
-        id: `${activeExam.id}-${studentId}-${subject}`,
-        examId: activeExam.id,
-        studentId,
-        subject,
-        assessments,
-        total,
-        percentage,
-        grade,
-        submitted: isFinal,
-        updatedAt: new Date().toISOString()
+      setMarks(newMarks);
+      addLog('Save Marks', `Updated marks for ${activeExam.title} - ${selectedEntryStudent.name}`);
+      alert('Marks saved successfully!');
+      
+      addNotification({
+        title: 'Marks Saved',
+        message: `You have successfully saved marks for "${activeExam.title}" - ${selectedEntryStudent.name}.`,
+        type: 'success',
+        role: 'teacher',
+        userId: currentTeacher.id
       });
-    });
+    } else {
+      if (!selectedEntrySubject) {
+        alert('Please select a subject to save marks.');
+        return;
+      }
 
-    setMarks(newMarks);
-    addLog(isFinal ? 'Submit Marks' : 'Save Draft', `Updated marks for ${activeExam.title} (${subject})`);
-    alert(isFinal ? 'Marks submitted as final!' : 'Draft saved successfully!');
-    
-    if (isFinal) {
-      setActiveExam(null);
+      const newMarks = [...marks.filter(m => m.examId !== activeExam.id || m.subject !== selectedEntrySubject)];
+      
+      Object.entries(currentMarks).forEach(([studentId, assessments]: [string, any]) => {
+        let total = 0;
+        Object.values(assessments).forEach(val => {
+          if (val) total += parseFloat(val as string);
+        });
+
+        const percentage = total; // Since total max is 100 in default config
+
+        // Find grade
+        const gradeObj = gradingSystem.find(g => percentage >= g.min && percentage <= g.max);
+        const grade = gradeObj ? gradeObj.grade : 'E';
+
+        newMarks.push({
+          id: `${activeExam.id}-${studentId}-${selectedEntrySubject}`,
+          examId: activeExam.id,
+          studentId,
+          subject: selectedEntrySubject,
+          assessments,
+          total,
+          percentage,
+          grade,
+          updatedAt: new Date().toISOString()
+        });
+      });
+
+      setMarks(newMarks);
+      addLog('Save Marks', `Updated marks for ${activeExam.title} - ${selectedEntrySubject}`);
+      alert('Marks saved successfully!');
+      
+      addNotification({
+        title: 'Marks Saved',
+        message: `You have successfully saved marks for "${activeExam.title}" - ${selectedEntrySubject}.`,
+        type: 'success',
+        role: 'teacher',
+        userId: currentTeacher.id
+      });
     }
-
-    addNotification({
-      title: isFinal ? 'Marks Submitted' : 'Draft Saved',
-      message: `You have successfully ${isFinal ? 'submitted' : 'saved a draft of'} marks for "${activeExam.title}" - ${subject}.`,
-      type: 'success',
-      role: 'teacher',
-      userId: currentTeacher.id
-    });
   };
 
-  const handleCSVImport = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleBulkUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -476,128 +406,86 @@ export const TeacherDashboard = () => {
       const ws = wb.Sheets[wsname];
       const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 
-      if (data.length < 2) {
-        alert('Invalid CSV file. No data found.');
-        return;
-      }
-
       const header = data[0];
-      const admIdx = header.findIndex((h: any) => String(h).toLowerCase().includes('adm'));
-      const scoreIdx = header.findIndex((h: any) => String(h).toLowerCase().includes('score') || String(h).toLowerCase().includes('mark'));
-
-      if (admIdx === -1 || scoreIdx === -1) {
-        alert('CSV must have "Admission Number" and "Score" columns.');
-        return;
-      }
-
-      const preview: any[] = [];
-      const errors: string[] = [];
-
-      data.slice(1).forEach((row, idx) => {
-        const adm = String(row[admIdx]).trim();
-        const score = row[scoreIdx];
-        const student = allStudents.find(s => s.adm === adm);
-
-        if (!student) {
-          errors.push(`Row ${idx + 2}: Student with ADM ${adm} not found.`);
-        } else {
-          preview.push({
-            studentId: student.id,
-            name: student.name,
-            adm: student.adm,
-            score: score,
-            isValid: score !== undefined && !isNaN(parseFloat(score)) && parseFloat(score) >= 0 && parseFloat(score) <= 100
-          });
+      const subjectIndices: { [key: string]: number } = {};
+      
+      header.forEach((cell, idx) => {
+        const la = String(cell).trim();
+        if (learningAreas.includes(la)) {
+          subjectIndices[la] = idx;
         }
       });
 
-      setImportPreviewData(preview);
-      setImportErrors(errors);
-      setShowImportPreview(true);
+      if (Object.keys(subjectIndices).length === 0) {
+        // Fallback to old format [Adm, Score]
+        setBulkPreviewData({ data, type: 'single' });
+      } else {
+        // Multi-subject upload
+        setBulkPreviewData({ data, subjectIndices, type: 'multi' });
+      }
+      setShowBulkPreview(true);
     };
     reader.readAsBinaryString(file);
   };
 
-  const confirmImport = () => {
-    const newMarksMap = { ...currentMarks };
-    importPreviewData.forEach(row => {
-      if (row.isValid) {
-        // Assuming primary subject for now
-        newMarksMap[row.studentId] = { ...newMarksMap[row.studentId], final: String(row.score) };
-      }
-    });
-    setCurrentMarks(newMarksMap);
-    setShowImportPreview(false);
-    alert('Marks imported to preview. Don\'t forget to click "Save All Marks" to persist changes.');
-  };
+  const confirmBulkUpload = () => {
+    if (!bulkPreviewData) return;
+    const { data, subjectIndices, type } = bulkPreviewData;
 
-  const handleProfilePhotoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const publicUrl = await supabaseService.uploadAvatar(currentTeacher.id, file);
-        setProfilePhoto(publicUrl);
-        
-        // Update profile in Supabase
-        await supabaseService.updateProfile(currentTeacher.id, { avatar_url: publicUrl });
-        
-        // Update local state
-        const updatedTeacher = { ...currentTeacher, avatar_url: publicUrl };
-        setCurrentTeacher(updatedTeacher);
-        localStorage.setItem('alakara_current_teacher', JSON.stringify(updatedTeacher));
-        
-        alert('Profile photo updated successfully!');
-      } catch (error: any) {
-        alert('Error uploading photo: ' + error.message);
-      }
-    }
-  };
-
-  const exportAnalysis = (format: 'excel' | 'pdf' = 'excel') => {
-    if (!selectedAnalysisExamId || analysisData.length === 0) return;
-    
-    const exam = exams.find(e => e.id === selectedAnalysisExamId);
-    
-    if (format === 'excel') {
-      const exportData = analysisData.map(row => ({
-        'Rank': row.rank,
-        'Adm No': row.adm,
-        'Student Name': row.name,
-        'Class': row.class,
-        'Total Score': row.totalScore,
-        'Average': row.average.toFixed(1),
-        'Grade': row.grade
-      }));
-
-      const ws = XLSX.utils.json_to_sheet(exportData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Analysis");
-      XLSX.writeFile(wb, `${exam?.title}_Analysis.xlsx`);
-    } else {
-      const doc = new jsPDF();
-      doc.setFontSize(18);
-      doc.text('Performance Analysis', 105, 15, { align: 'center' });
-      doc.setFontSize(12);
-      doc.text(`${exam?.title} (${exam?.term} ${exam?.year})`, 105, 25, { align: 'center' });
-      
-      autoTable(doc, {
-        startY: 35,
-        head: [['Rank', 'Adm', 'Name', 'Class', 'Total', 'Avg', 'Grade']],
-        body: analysisData.map(row => [
-          row.rank,
-          row.adm,
-          row.name,
-          row.class,
-          row.totalScore,
-          row.average.toFixed(1),
-          row.grade
-        ]),
-        theme: 'grid',
-        headStyles: { fillColor: [0, 102, 51] }
+    if (type === 'single') {
+      const newMarksMap = { ...currentMarks };
+      data.forEach((row: any, index: number) => {
+        if (index === 0 && isNaN(Number(row[1]))) return;
+        const admNo = String(row[0]).trim();
+        const score = row[1];
+        const student = allStudents.find(s => s.adm === admNo);
+        if (student) {
+          newMarksMap[student.id] = String(score);
+        }
       });
+      setCurrentMarks(newMarksMap);
+    } else {
+      const newMarks = [...marks];
+      data.slice(1).forEach((row: any) => {
+        const admNo = String(row[0]).trim();
+        const student = allStudents.find(s => s.adm === admNo);
+        if (student) {
+          Object.entries(subjectIndices).forEach(([subject, idx]) => {
+            const score = row[idx as number];
+            if (score !== undefined && score !== '') {
+              const markIdx = newMarks.findIndex(m => m.studentId === student.id && m.examId === activeExam.id && m.subject === subject);
+              const markData = {
+                id: Math.random().toString(36).substr(2, 9),
+                examId: activeExam.id,
+                studentId: student.id,
+                score: String(score),
+                subject,
+                updatedAt: new Date().toISOString()
+              };
+              if (markIdx > -1) newMarks[markIdx] = markData;
+              else newMarks.push(markData);
+            }
+          });
+        }
+      });
+      setMarks(newMarks);
       
-      doc.save(`${exam?.title}_Analysis.pdf`);
+      const primarySubject = 'Mathematics'; 
+      const primaryIdx = subjectIndices[primarySubject];
+      if (primaryIdx !== undefined) {
+        const newMarksMap = { ...currentMarks };
+        data.slice(1).forEach((row: any) => {
+          const admNo = String(row[0]).trim();
+          const student = allStudents.find(s => s.adm === admNo);
+          if (student) newMarksMap[student.id] = String(row[primaryIdx]);
+        });
+        setCurrentMarks(newMarksMap);
+      }
     }
+    
+    setShowBulkPreview(false);
+    setBulkPreviewData(null);
+    alert('Bulk marks imported successfully!');
   };
 
   const downloadMarksTemplate = () => {
@@ -612,6 +500,19 @@ export const TeacherDashboard = () => {
     XLSX.writeFile(wb, `${activeExam.title}_Marks_Template.xlsx`);
   };
 
+  const handleProfilePhotoUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const updatedTeacher = { ...currentTeacher, avatar_url: reader.result };
+        setCurrentTeacher(updatedTeacher);
+        localStorage.setItem('alakara_current_teacher', JSON.stringify(updatedTeacher));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const [selectedRankingSubject, setSelectedRankingSubject] = useState('');
 
   const getAnalysisData = () => {
@@ -619,7 +520,7 @@ export const TeacherDashboard = () => {
     
     const examMarks = marks.filter(m => m.examId === selectedAnalysisExamId);
     const exam = exams.find(e => e.id === selectedAnalysisExamId);
-    if (!exam || !exam.published) return [];
+    if (!exam) return [];
 
     // Group marks by student - Filtered by assigned classes
     const studentAnalysis = allStudents
@@ -668,9 +569,6 @@ export const TeacherDashboard = () => {
   const getSubjectRanking = () => {
     if (!selectedAnalysisExamId || !selectedRankingSubject) return [];
     
-    const exam = exams.find(e => e.id === selectedAnalysisExamId);
-    if (!exam || !exam.published) return [];
-
     const examMarks = marks.filter(m => m.examId === selectedAnalysisExamId && m.subject === selectedRankingSubject);
     
     const ranked = examMarks
@@ -690,62 +588,116 @@ export const TeacherDashboard = () => {
 
   const subjectRanking = getSubjectRanking();
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex font-sans relative">
-      {/* Mobile Sidebar Overlay */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+  const exportAnalysisPDF = () => {
+    if (!selectedAnalysisExamId) return;
+    const exam = exams.find(e => e.id === selectedAnalysisExamId);
+    if (!exam) return;
 
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Performance Analysis: ${exam.title}`, 14, 20);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Class: ${selectedAnalysisClass} | Date: ${new Date().toLocaleDateString()}`, 14, 28);
+
+    const headers = ['Rank', 'Adm No', 'Name', ...learningAreas, 'Total', 'Avg', 'Grade'];
+    const data = analysisData.map((row: any) => [
+      row.rank,
+      row.adm,
+      row.name,
+      ...learningAreas.map(la => row.subjectScores[la] !== null ? row.subjectScores[la] : '--'),
+      row.totalScore.toFixed(0),
+      `${row.average.toFixed(1)}%`,
+      row.grade
+    ]);
+
+    autoTable(doc, {
+      startY: 35,
+      head: [headers],
+      body: data,
+      theme: 'grid',
+      headStyles: { fillColor: [0, 140, 81] },
+      styles: { fontSize: 8 }
+    });
+
+    doc.save(`Analysis_${exam.title}_${selectedAnalysisClass}.pdf`);
+  };
+
+  const exportAnalysisExcel = () => {
+    if (!selectedAnalysisExamId) return;
+    const exam = exams.find(e => e.id === selectedAnalysisExamId);
+    if (!exam) return;
+
+    const headers = ['Rank', 'Adm No', 'Name', ...learningAreas, 'Total', 'Avg', 'Grade'];
+    const data = analysisData.map((row: any) => [
+      row.rank,
+      row.adm,
+      row.name,
+      ...learningAreas.map(la => row.subjectScores[la] !== null ? row.subjectScores[la] : '--'),
+      row.totalScore.toFixed(0),
+      `${row.average.toFixed(1)}%`,
+      row.grade
+    ]);
+
+    const wsData = [
+      [`Performance Analysis: ${exam.title}`],
+      [`Class: ${selectedAnalysisClass}`, `Date: ${new Date().toLocaleDateString()}`],
+      [],
+      headers,
+      ...data
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Analysis");
+    XLSX.writeFile(wb, `Analysis_${exam.title}_${selectedAnalysisClass}.xlsx`);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex font-sans">
       {/* Sidebar */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-50 w-72 bg-kenya-black text-white flex flex-col shrink-0 transition-transform duration-300 lg:relative lg:translate-x-0
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
+      <aside className="w-72 bg-kenya-black text-white flex flex-col shrink-0">
         <div className="p-8">
-          <div className="flex items-center justify-between mb-12">
-            <div className="flex items-center gap-3 group cursor-pointer" onClick={() => navigate('/')}>
-              <div className="bg-kenya-green p-2 rounded-lg group-hover:rotate-12 transition-transform">
-                <GraduationCap className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-bold tracking-tight">Alakara <span className="text-kenya-red">Staff</span></span>
+          <div className="flex items-center gap-3 mb-12 group cursor-pointer" onClick={() => navigate('/')}>
+            <div className="bg-kenya-green p-2 rounded-lg group-hover:rotate-12 transition-transform">
+              <GraduationCap className="w-6 h-6 text-white" />
             </div>
-            <button 
-              className="lg:hidden text-gray-400 hover:text-white"
-              onClick={() => setIsSidebarOpen(false)}
-            >
-              <X className="w-6 h-6" />
-            </button>
+            <span className="text-xl font-bold tracking-tight">Alakara <span className="text-kenya-red">Staff</span></span>
           </div>
 
           <nav className="space-y-2">
             <button 
-              onClick={() => { setActiveTab('exams'); setActiveExam(null); setIsSidebarOpen(false); }}
+              onClick={() => { setActiveTab('exams'); setActiveExam(null); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'exams' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
             >
               <BookOpen className="w-5 h-5" />
               Examinations
             </button>
             <button 
-              onClick={() => { setActiveTab('analysis'); setActiveExam(null); setIsSidebarOpen(false); }}
+              onClick={() => { setActiveTab('analysis'); setActiveExam(null); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'analysis' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
             >
               <BarChart3 className="w-5 h-5" />
               Exam Analysis
             </button>
             <button 
-              onClick={() => { setActiveTab('materials'); setActiveExam(null); setIsSidebarOpen(false); }}
+              onClick={() => { setActiveTab('materials'); setActiveExam(null); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'materials' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
             >
               <FileText className="w-5 h-5" />
               Materials
             </button>
+            <button 
+              onClick={() => { setActiveTab('assignments'); setActiveExam(null); setSelectedAssignment(null); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'assignments' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+            >
+              <FileText className="w-5 h-5" />
+              Assignments
+            </button>
             {teacherRole === 'Class Teacher' && (
               <button 
-                onClick={() => { setActiveTab('class-management'); setActiveExam(null); setIsSidebarOpen(false); }}
+                onClick={() => { setActiveTab('class-management'); setActiveExam(null); }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'class-management' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
               >
                 <Users className="w-5 h-5" />
@@ -753,7 +705,7 @@ export const TeacherDashboard = () => {
               </button>
             )}
             <button 
-              onClick={() => { setActiveTab('profile'); setIsSidebarOpen(false); }}
+              onClick={() => setActiveTab('profile')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'profile' ? 'bg-kenya-green text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
             >
               <LayoutDashboard className="w-5 h-5" />
@@ -776,15 +728,9 @@ export const TeacherDashboard = () => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-8 shrink-0">
+        <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0">
           <div className="flex items-center gap-4">
-            <button 
-              className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              onClick={() => setIsSidebarOpen(true)}
-            >
-              <Menu className="w-6 h-6 text-kenya-black" />
-            </button>
-            <h2 className="font-bold text-kenya-black text-lg truncate max-w-[150px] sm:max-w-none">
+            <h2 className="font-bold text-kenya-black text-lg">
               {activeExam ? `Mark Entry: ${activeExam.title}` : 'Teacher Portal'}
             </h2>
           </div>
@@ -796,8 +742,8 @@ export const TeacherDashboard = () => {
               <p className="text-xs text-gray-500">Mathematics Dept.</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-kenya-green/10 flex items-center justify-center overflow-hidden">
-              {profilePhoto ? (
-                <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+              {currentTeacher.avatar_url ? (
+                <img src={currentTeacher.avatar_url} alt="Profile" className="w-full h-full object-cover" />
               ) : (
                 <FileText className="w-5 h-5 text-kenya-green" />
               )}
@@ -810,119 +756,6 @@ export const TeacherDashboard = () => {
           {activeTab === 'exams' ? (
             !activeExam ? (
               <div className="space-y-8">
-                <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-kenya-black">Mark Entry Configuration</h2>
-                    {entryConfig.classId && (
-                      <div className="flex items-center gap-2 px-3 py-1 bg-kenya-green/10 text-kenya-green rounded-full">
-                        <Users className="w-3 h-3" />
-                        <span className="text-[10px] font-black uppercase tracking-wider">
-                          {allStudents.filter(s => {
-                            const className = classes.find(c => c.id === entryConfig.classId)?.name;
-                            const matchesClass = s.class?.trim() === className?.trim();
-                            const matchesStream = !entryConfig.streamId || s.streamId === entryConfig.streamId;
-                            return matchesClass && matchesStream;
-                          }).length} Students Found
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Class</label>
-                      <select 
-                        value={entryConfig.classId}
-                        onChange={(e) => setEntryConfig({...entryConfig, classId: e.target.value, streamId: ''})}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold text-sm"
-                      >
-                        <option value="">Select Class...</option>
-                        {classes.filter(c => assignedClasses.includes(c.name)).map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Stream</label>
-                      <select 
-                        value={entryConfig.streamId}
-                        onChange={(e) => setEntryConfig({...entryConfig, streamId: e.target.value})}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold text-sm"
-                      >
-                        <option value="">All Streams</option>
-                        {streams.filter(s => s.classId === entryConfig.classId).map(s => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subject</label>
-                      <select 
-                        value={entryConfig.subject}
-                        onChange={(e) => setEntryConfig({...entryConfig, subject: e.target.value})}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold text-sm"
-                      >
-                        <option value="">Select Subject...</option>
-                        {Array.from(new Set(currentTeacher.assignments.map((a: any) => a.subject))).map((s: any) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Term</label>
-                      <select 
-                        value={entryConfig.term}
-                        onChange={(e) => setEntryConfig({...entryConfig, term: e.target.value})}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold text-sm"
-                      >
-                        <option value="Term 1">Term 1</option>
-                        <option value="Term 2">Term 2</option>
-                        <option value="Term 3">Term 3</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  {entryConfig.classId && entryConfig.subject && (
-                    <div className="mt-6 pt-6 border-t border-gray-100 flex justify-end">
-                      <Button 
-                        variant="secondary" 
-                        size="sm"
-                        onClick={async () => {
-                          setIsFetchingStudents(true);
-                          await new Promise(resolve => setTimeout(resolve, 800));
-                          
-                          // Actually reload from localStorage
-                          const savedStudents = localStorage.getItem('alakara_students');
-                          if (savedStudents) {
-                            setAllStudents(JSON.parse(savedStudents));
-                          }
-                          
-                          const savedClasses = localStorage.getItem('alakara_classes');
-                          if (savedClasses) {
-                            setClasses(JSON.parse(savedClasses));
-                          }
-
-                          const savedStreams = localStorage.getItem('alakara_streams');
-                          if (savedStreams) {
-                            setStreams(JSON.parse(savedStreams));
-                          }
-
-                          setIsFetchingStudents(false);
-                          alert('Student list synchronized for ' + entryConfig.subject);
-                        }}
-                        disabled={isFetchingStudents}
-                        className="gap-2 rounded-xl"
-                      >
-                        {isFetchingStudents ? (
-                          <div className="w-4 h-4 border-2 border-kenya-green/30 border-t-kenya-green rounded-full animate-spin" />
-                        ) : (
-                          <Users className="w-4 h-4" />
-                        )}
-                        Fetch Student Names
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
                 <div className="flex items-center justify-between">
                   <div>
                     <h1 className="text-3xl font-black text-kenya-black uppercase tracking-tight">Active Examinations</h1>
@@ -965,19 +798,9 @@ export const TeacherDashboard = () => {
                         onClick={() => startMarkEntry(exam)}
                         className="w-full gap-2 rounded-2xl"
                         variant={exam.status === 'Active' ? 'default' : 'secondary'}
-                        disabled={isFetchingStudents || (exam.status !== 'Active' && !exam.published)}
                       >
-                        {isFetchingStudents ? (
-                          <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Fetching Students...
-                          </div>
-                        ) : (
-                          <>
-                            {exam.status === 'Active' ? 'Enter Marks' : (exam.published ? 'View Performance' : 'Results Pending')}
-                            <ChevronRight className="w-4 h-4" />
-                          </>
-                        )}
+                        {exam.status === 'Active' ? 'Enter Marks' : 'View Performance'}
+                        <ChevronRight className="w-4 h-4" />
                       </Button>
                     </motion.div>
                   ))}
@@ -1007,21 +830,6 @@ export const TeacherDashboard = () => {
                   <div className="flex items-center gap-4">
                     {activeExam.status === 'Active' && (
                       <>
-                        <input 
-                          type="file" 
-                          id="bulk-upload" 
-                          className="hidden" 
-                          accept=".csv"
-                          onChange={handleCSVImport}
-                        />
-                        <Button 
-                          variant="secondary" 
-                          onClick={() => document.getElementById('bulk-upload')?.click()}
-                          className="gap-2 rounded-2xl"
-                        >
-                          <Upload className="w-4 h-4" />
-                          Bulk Upload (Excel)
-                        </Button>
                         <Button 
                           variant="ghost" 
                           onClick={downloadMarksTemplate}
@@ -1030,13 +838,9 @@ export const TeacherDashboard = () => {
                           <Download className="w-4 h-4" />
                           Template
                         </Button>
-                        <Button onClick={() => saveMarks(false)} variant="secondary" className="gap-2 rounded-2xl">
+                        <Button onClick={saveMarks} className="gap-2 rounded-2xl shadow-lg shadow-kenya-green/20">
                           <Save className="w-4 h-4" />
-                          Save Draft
-                        </Button>
-                        <Button onClick={() => saveMarks(true)} className="gap-2 rounded-2xl shadow-lg shadow-kenya-green/20">
-                          <CheckCircle2 className="w-4 h-4" />
-                          Submit Final
+                          Save All Marks
                         </Button>
                       </>
                     )}
@@ -1044,11 +848,11 @@ export const TeacherDashboard = () => {
                 </div>
 
                 <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
-                  <div className="p-8 border-b border-gray-100 bg-gray-50/50">
+                  <div className="p-8 border-b border-gray-100 bg-gray-50/50 space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
                         <h2 className="text-2xl font-bold text-kenya-black">Student Mark Entry</h2>
-                        <p className="text-gray-500">Subject: {entryConfig.subject} | Class: {classes.find(c => c.id === entryConfig.classId)?.name} {streams.find(s => s.id === entryConfig.streamId)?.name || ''}</p>
+                        <p className="text-gray-500">Select class and subject to enter marks.</p>
                       </div>
                       {activeExam.status !== 'Active' && (
                         <div className="flex items-center gap-2 text-blue-600 bg-blue-50 px-4 py-2 rounded-xl font-bold text-sm">
@@ -1057,83 +861,155 @@ export const TeacherDashboard = () => {
                         </div>
                       )}
                     </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <select 
+                        value={selectedEntryClass}
+                        onChange={(e) => setSelectedEntryClass(e.target.value)}
+                        className="px-4 py-2 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold text-sm"
+                      >
+                        <option value="">Select Class...</option>
+                        {assignedClasses.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <select 
+                        value={selectedEntryStream}
+                        onChange={(e) => setSelectedEntryStream(e.target.value)}
+                        className="px-4 py-2 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold text-sm"
+                      >
+                        <option value="">Select Stream...</option>
+                        <option value="All">All Streams</option>
+                      </select>
+                      <select 
+                        value={selectedEntrySubject}
+                        onChange={(e) => setSelectedEntrySubject(e.target.value)}
+                        className="px-4 py-2 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold text-sm"
+                      >
+                        <option value="">Select Subject...</option>
+                        {learningAreas.map(la => (
+                          <option key={la} value={la}>{la}</option>
+                        ))}
+                      </select>
+                      <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl p-1">
+                        <button
+                          onClick={() => setEntryMode('individual')}
+                          className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors ${entryMode === 'individual' ? 'bg-kenya-green text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                        >
+                          Individual Entry
+                        </button>
+                        <button
+                          onClick={() => setEntryMode('bulk')}
+                          className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors ${entryMode === 'bulk' ? 'bg-kenya-green text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                        >
+                          Bulk Upload
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left min-w-[800px]">
-                      <thead>
-                        <tr className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                          <th className="px-8 py-4">Admission No</th>
-                          <th className="px-8 py-4">Student Name</th>
-                          {assessmentCategories.map(cat => (
-                            <th key={cat.id} className="px-4 py-4 text-center w-32">
-                              {cat.name}
-                              <span className="block text-[8px] opacity-60">Max: {cat.maxScore}</span>
-                            </th>
-                          ))}
-                          <th className="px-8 py-4 text-center">Total</th>
-                          <th className="px-8 py-4">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {filteredStudents.map((student) => {
-                            const studentAssessments = currentMarks[student.id] || {};
-                            let rowTotal = 0;
-                            Object.values(studentAssessments).forEach(val => {
-                              if (val) rowTotal += parseFloat(val as string);
-                            });
-
-                            return (
-                              <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
-                                <td className="px-8 py-6 font-mono text-sm text-gray-500">{student.adm}</td>
-                                <td className="px-8 py-6 font-bold text-kenya-black">{student.name}</td>
-                                {assessmentCategories.map(cat => (
-                                  <td key={cat.id} className="px-4 py-6">
-                                    <input 
-                                      type="number"
-                                      min="0"
-                                      max={cat.maxScore}
-                                      value={studentAssessments[cat.id] || ''}
-                                      onChange={(e) => handleMarkChange(student.id, cat.id, e.target.value)}
-                                      disabled={activeExam.status !== 'Active' || activeExam.locked}
-                                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold text-center disabled:opacity-50"
-                                      placeholder="--"
-                                    />
-                                  </td>
-                                ))}
-                                <td className="px-8 py-6 text-center">
-                                  <span className="text-lg font-black text-kenya-black">{rowTotal}</span>
-                                </td>
-                                <td className="px-8 py-6">
-                                  {Object.keys(studentAssessments).length === assessmentCategories.length ? (
-                                    <span className="text-kenya-green flex items-center gap-1 text-xs font-bold uppercase">
-                                      <CheckCircle2 className="w-4 h-4" />
-                                      Complete
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-300 flex items-center gap-1 text-xs font-bold uppercase">
-                                      <Clock className="w-4 h-4" />
-                                      Partial
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        {filteredStudents.length === 0 && (
-                          <tr>
-                            <td colSpan={assessmentCategories.length + 4} className="px-8 py-20 text-center">
-                              <div className="flex flex-col items-center gap-2 text-gray-400">
-                                <Users className="w-12 h-12 opacity-20" />
-                                <p className="font-bold uppercase tracking-tight">No students found for this selection</p>
-                                <p className="text-xs">Check your class/stream selection or ensure students are assigned to this exam.</p>
-                              </div>
-                            </td>
+                  {entryMode === 'bulk' ? (
+                    <div className="p-12 text-center space-y-6">
+                      <div className="w-24 h-24 bg-kenya-green/10 rounded-full flex items-center justify-center mx-auto">
+                        <Upload className="w-10 h-10 text-kenya-green" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-kenya-black mb-2">Bulk Upload Marks</h3>
+                        <p className="text-gray-500 max-w-md mx-auto">
+                          Download the template, fill in the marks for all students, and upload the completed Excel file here.
+                        </p>
+                      </div>
+                      <div className="flex justify-center gap-4">
+                        <Button variant="secondary" onClick={downloadMarksTemplate} className="gap-2">
+                          <Download className="w-4 h-4" />
+                          Download Template
+                        </Button>
+                        <input 
+                          type="file" 
+                          id="bulk-upload-main" 
+                          className="hidden" 
+                          accept=".xlsx, .xls, .csv"
+                          onChange={handleBulkUpload}
+                        />
+                        <Button onClick={() => document.getElementById('bulk-upload-main')?.click()} className="gap-2">
+                          <Upload className="w-4 h-4" />
+                          Select File
+                        </Button>
+                      </div>
+                    </div>
+                  ) : selectedEntryClass && selectedEntrySubject ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            <th className="px-8 py-4">Admission No</th>
+                            <th className="px-8 py-4">Student Name</th>
+                            {assessmentCategories.map(cat => (
+                              <th key={cat.id} className="px-4 py-4 text-center w-32">
+                                {cat.name}
+                                <span className="block text-[8px] opacity-60">Max: {cat.maxScore}</span>
+                              </th>
+                            ))}
+                            <th className="px-8 py-4 text-center">Total</th>
+                            <th className="px-8 py-4">Status</th>
                           </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {allStudents
+                            .filter(s => s.class === selectedEntryClass)
+                            .map((student) => {
+                              const studentAssessments = currentMarks[student.id] || {};
+                              let rowTotal = 0;
+                              Object.values(studentAssessments).forEach(val => {
+                                if (val) rowTotal += parseFloat(val as string);
+                              });
+
+                              return (
+                                <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
+                                  <td className="px-8 py-6 font-mono text-sm text-gray-500">{student.adm}</td>
+                                  <td className="px-8 py-6 font-bold text-kenya-black">{student.name}</td>
+                                  {assessmentCategories.map(cat => (
+                                    <td key={cat.id} className="px-4 py-6">
+                                      <input 
+                                        type="number"
+                                        min="0"
+                                        max={cat.maxScore}
+                                        value={studentAssessments[cat.id] || ''}
+                                        onChange={(e) => handleMarkChange(student.id, cat.id, e.target.value)}
+                                        disabled={activeExam.status !== 'Active' || activeExam.locked}
+                                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold text-center disabled:opacity-50"
+                                        placeholder="--"
+                                      />
+                                    </td>
+                                  ))}
+                                  <td className="px-8 py-6 text-center">
+                                    <span className="text-lg font-black text-kenya-black">{rowTotal}</span>
+                                  </td>
+                                  <td className="px-8 py-6">
+                                    {Object.keys(studentAssessments).length === assessmentCategories.length ? (
+                                      <span className="text-kenya-green flex items-center gap-1 text-xs font-bold uppercase">
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        Complete
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-300 flex items-center gap-1 text-xs font-bold uppercase">
+                                        <Clock className="w-4 h-4" />
+                                        Partial
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="p-12 text-center">
+                      <Filter className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500 font-medium">Please select a class and subject to enter marks.</p>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )
@@ -1142,22 +1018,10 @@ export const TeacherDashboard = () => {
               <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                   <div>
-                    <h3 className="text-xl font-bold text-kenya-black uppercase tracking-tight">Performance Analysis</h3>
+                    <h3 className="text-xl font-bold text-kenya-black">Performance Analysis</h3>
                     <p className="text-sm text-gray-500">View detailed results and subject rankings.</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-4">
-                    {selectedAnalysisExamId && (
-                      <div className="flex items-center gap-2">
-                        <Button variant="secondary" size="sm" onClick={() => exportAnalysis('excel')} className="gap-2 rounded-xl">
-                          <ExcelIcon className="w-4 h-4" />
-                          Excel
-                        </Button>
-                        <Button variant="secondary" size="sm" onClick={() => exportAnalysis('pdf')} className="gap-2 rounded-xl">
-                          <Download className="w-4 h-4" />
-                          PDF
-                        </Button>
-                      </div>
-                    )}
                     <select 
                       value={selectedAnalysisClass}
                       onChange={(e) => setSelectedAnalysisClass(e.target.value)}
@@ -1175,11 +1039,41 @@ export const TeacherDashboard = () => {
                     >
                       <option value="">Select Examination...</option>
                       {exams
-                        .filter(e => e.published && e.classes.some((c: string) => assignedClasses.includes(c)))
+                        .filter(e => e.classes.some((c: string) => assignedClasses.includes(c)))
                         .map(e => (
                           <option key={e.id} value={e.id}>{e.title} ({e.term} {e.year})</option>
                         ))}
                     </select>
+                    
+                    {selectedAnalysisExamId && (
+                      <div className="flex items-center gap-4 bg-gray-50 px-4 py-2 rounded-xl border border-gray-100">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            checked={analysisOptions.showGrades}
+                            onChange={(e) => setAnalysisOptions({...analysisOptions, showGrades: e.target.checked})}
+                            className="w-4 h-4 rounded border-gray-300 text-kenya-green focus:ring-kenya-green"
+                          />
+                          <span className="text-xs font-bold text-gray-600">Show Grades</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            checked={analysisOptions.showRank}
+                            onChange={(e) => setAnalysisOptions({...analysisOptions, showRank: e.target.checked})}
+                            className="w-4 h-4 rounded border-gray-300 text-kenya-green focus:ring-kenya-green"
+                          />
+                          <span className="text-xs font-bold text-gray-600">Show Rank</span>
+                        </label>
+                        <div className="h-6 w-px bg-gray-200 mx-2"></div>
+                        <button onClick={exportAnalysisExcel} className="text-gray-500 hover:text-kenya-green transition-colors" title="Export Excel">
+                          <FileSpreadsheet className="w-5 h-5" />
+                        </button>
+                        <button onClick={exportAnalysisPDF} className="text-gray-500 hover:text-kenya-green transition-colors" title="Export PDF">
+                          <Download className="w-5 h-5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1190,7 +1084,7 @@ export const TeacherDashboard = () => {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[1000px]">
+                    <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-wider border-b border-gray-100">
                           {analysisOptions.showRank && <th className="px-4 py-4 sticky left-0 bg-gray-50 z-10">Rank</th>}
@@ -1307,200 +1201,249 @@ export const TeacherDashboard = () => {
                 </div>
               )}
             </div>
+          ) : activeTab === 'assignments' ? (
+            <div className="space-y-8">
+              {!selectedAssignment ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h1 className="text-3xl font-black text-kenya-black uppercase tracking-tight">Assignments</h1>
+                      <p className="text-gray-500">Create and manage assignments for your classes.</p>
+                    </div>
+                    <Button onClick={() => setShowAddAssignmentModal(true)} className="gap-2 rounded-2xl">
+                      <Plus className="w-4 h-4" />
+                      New Assignment
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {assignments.map(assignment => (
+                      <motion.div
+                        key={assignment.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group"
+                        onClick={() => setSelectedAssignment(assignment)}
+                      >
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="p-3 bg-kenya-green/10 rounded-2xl text-kenya-green">
+                            <FileText className="w-6 h-6" />
+                          </div>
+                          <span className="px-3 py-1 bg-gray-100 rounded-xl text-xs font-bold text-gray-600">
+                            {assignment.subject}
+                          </span>
+                        </div>
+                        <h3 className="text-xl font-bold text-kenya-black mb-2 group-hover:text-kenya-green transition-colors">{assignment.title}</h3>
+                        <p className="text-gray-500 text-sm mb-4 line-clamp-2">{assignment.description}</p>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-bold text-gray-600">{assignment.class}</span>
+                          <span className="text-gray-400">Due: {new Date(assignment.dueDate).toLocaleDateString()}</span>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center text-sm">
+                          <span className="text-gray-500">Max Marks: <span className="font-bold text-kenya-black">{assignment.maxMarks}</span></span>
+                          <span className="text-kenya-green font-bold">
+                            {submissions.filter(s => s.assignmentId === assignment.id).length} Submissions
+                          </span>
+                        </div>
+                      </motion.div>
+                    ))}
+                    {assignments.length === 0 && (
+                      <div className="col-span-full py-20 text-center bg-white rounded-[3rem] border-4 border-dashed border-gray-100">
+                        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <p className="text-xl font-bold text-gray-400 uppercase tracking-tight">No assignments created yet</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <motion.div 
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="space-y-8"
+                >
+                  <div className="flex items-center justify-between">
+                    <button 
+                      onClick={() => setSelectedAssignment(null)}
+                      className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-kenya-black transition-colors"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Back to Assignments
+                    </button>
+                    <div className="flex items-center gap-4">
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => {
+                          if (window.confirm('Are you sure you want to delete this assignment?')) {
+                            setAssignments(assignments.filter(a => a.id !== selectedAssignment.id));
+                            setSubmissions(submissions.filter(s => s.assignmentId !== selectedAssignment.id));
+                            setSelectedAssignment(null);
+                          }
+                        }}
+                        className="gap-2 rounded-2xl text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete Assignment
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
+                    <div className="p-8 border-b border-gray-100 bg-gray-50/50">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h2 className="text-2xl font-bold text-kenya-black">{selectedAssignment.title}</h2>
+                          <p className="text-gray-500">{selectedAssignment.subject} | {selectedAssignment.class}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-500">Due Date</p>
+                          <p className="font-bold text-kenya-black">{new Date(selectedAssignment.dueDate).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      <p className="text-gray-600">{selectedAssignment.description}</p>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            <th className="px-8 py-4">Student</th>
+                            <th className="px-8 py-4">Submission Date</th>
+                            <th className="px-8 py-4">Status</th>
+                            <th className="px-8 py-4 text-center">Marks (/{selectedAssignment.maxMarks})</th>
+                            <th className="px-8 py-4">Feedback</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {allStudents
+                            .filter(s => s.class === selectedAssignment.class)
+                            .map(student => {
+                              const submission = submissions.find(s => s.studentId === student.id && s.assignmentId === selectedAssignment.id);
+                              return (
+                                <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
+                                  <td className="px-8 py-6">
+                                    <p className="font-bold text-kenya-black">{student.name}</p>
+                                    <p className="font-mono text-xs text-gray-500">{student.adm}</p>
+                                  </td>
+                                  <td className="px-8 py-6 text-sm text-gray-600">
+                                    {submission ? new Date(submission.submittedAt).toLocaleDateString() : '--'}
+                                  </td>
+                                  <td className="px-8 py-6">
+                                    {submission ? (
+                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black bg-kenya-green/10 text-kenya-green uppercase">
+                                        Submitted
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black bg-gray-100 text-gray-500 uppercase">
+                                        Pending
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-8 py-6 text-center">
+                                    {submission ? (
+                                      <input 
+                                        type="number"
+                                        min="0"
+                                        max={selectedAssignment.maxMarks}
+                                        value={submission.marks || ''}
+                                        onChange={(e) => {
+                                          const newSubmissions = [...submissions];
+                                          const idx = newSubmissions.findIndex(s => s.id === submission.id);
+                                          newSubmissions[idx].marks = e.target.value;
+                                          setSubmissions(newSubmissions);
+                                        }}
+                                        className="w-20 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 font-bold text-center"
+                                        placeholder="--"
+                                      />
+                                    ) : (
+                                      <span className="text-gray-400">--</span>
+                                    )}
+                                  </td>
+                                  <td className="px-8 py-6">
+                                    {submission ? (
+                                      <input 
+                                        type="text"
+                                        value={submission.feedback || ''}
+                                        onChange={(e) => {
+                                          const newSubmissions = [...submissions];
+                                          const idx = newSubmissions.findIndex(s => s.id === submission.id);
+                                          newSubmissions[idx].feedback = e.target.value;
+                                          setSubmissions(newSubmissions);
+                                        }}
+                                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 text-sm"
+                                        placeholder="Add feedback..."
+                                      />
+                                    ) : (
+                                      <span className="text-gray-400">--</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </div>
           ) : activeTab === 'materials' ? (
             <div className="space-y-8">
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-3xl font-black text-kenya-black uppercase tracking-tight">Learning Materials</h1>
-                  <p className="text-gray-500">Access and manage educational resources for your classes.</p>
+                  <p className="text-gray-500">Upload and manage exam materials and revision guides.</p>
                 </div>
-                <div className="flex gap-3">
-                  <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200">
-                    <button 
-                      onClick={() => setMaterialsSubTab('my-materials')}
-                      className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${materialsSubTab === 'my-materials' ? 'bg-white text-kenya-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                      My Assignments
-                    </button>
-                    <button 
-                      onClick={() => setMaterialsSubTab('public')}
-                      className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${materialsSubTab === 'public' ? 'bg-white text-kenya-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                      Public Resources
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {materialsSubTab === 'my-materials' ? (
-                <div className="space-y-6">
-                  <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-wrap items-center gap-4">
-                    <div className="flex-1 min-w-[200px] relative">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input 
-                        type="text" 
-                        placeholder="Search materials..." 
-                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none"
-                      />
-                    </div>
-                    <select className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none font-bold text-sm">
-                      <option value="">All Subjects</option>
-                      {Array.from(new Set(currentTeacher.assignments.map((a: any) => a.subject))).map((s: any) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                    <select className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none font-bold text-sm">
-                      <option value="">All Classes</option>
-                      {Array.from(new Set(currentTeacher.assignments.map((a: any) => a.classId))).map((c: any) => {
-                        const className = classes.find(cl => cl.id === c)?.name || `Class ${c}`;
-                        return <option key={c} value={c}>{className}</option>;
-                      })}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {examMaterials
-                      .filter(m => currentTeacher.assignments.some((a: any) => a.subject === m.subject))
-                      .map((material) => (
-                      <div key={material.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group">
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="bg-kenya-green/10 p-3 rounded-2xl group-hover:rotate-6 transition-transform">
-                            <BookOpen className="w-6 h-6 text-kenya-green" />
-                          </div>
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{material.fileType}</span>
-                        </div>
-                        <h3 className="text-lg font-bold text-kenya-black mb-1 truncate">{material.title}</h3>
-                        <div className="flex flex-wrap gap-2 mb-6">
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[10px] font-bold uppercase">{material.subject}</span>
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[10px] font-bold uppercase">Grade 7</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] text-gray-400 font-bold uppercase mb-6">
-                          <span>{material.uploadedAt || '2024-03-15'}</span>
-                          <span>By Admin</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="secondary" className="flex-1 gap-2 rounded-2xl py-2 text-xs">
-                            <Download className="w-3 h-3" />
-                            Download
-                          </Button>
-                          <Button variant="ghost" className="flex-1 gap-2 rounded-2xl py-2 text-xs border border-gray-100">
-                            <Search className="w-3 h-3" />
-                            View
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    {examMaterials.filter(m => currentTeacher.assignments.some((a: any) => a.subject === m.subject)).length === 0 && (
-                      <div className="col-span-full py-20 text-center bg-gray-50 rounded-[3rem] border-4 border-dashed border-gray-200">
-                        <Library className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                        <p className="text-xl font-bold text-gray-400 uppercase tracking-tight">No materials assigned to your subjects</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {isLoadingResources ? (
-                    <div className="col-span-full py-20 text-center">
-                      <div className="animate-spin w-10 h-10 border-4 border-kenya-green border-t-transparent rounded-full mx-auto mb-4"></div>
-                      <p className="text-gray-500 font-bold">Loading resources...</p>
-                    </div>
-                  ) : publicResources.length > 0 ? (
-                    publicResources.map((resource) => (
-                      <div key={resource.name} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group">
-                        <div className="bg-blue-50 p-3 rounded-2xl w-fit mb-4 group-hover:rotate-6 transition-transform">
-                          <FileText className="w-6 h-6 text-blue-600" />
-                        </div>
-                        <h3 className="text-lg font-bold text-kenya-black mb-1 truncate">{resource.name}</h3>
-                        <p className="text-xs text-gray-500 mb-6 uppercase font-bold tracking-wider">Public Resource</p>
-                        
-                        <Button 
-                          variant="secondary" 
-                          className="w-full gap-2 rounded-2xl"
-                          onClick={async () => {
-                            const url = await supabaseService.getResourceUrl(resource.name);
-                            window.open(url, '_blank');
-                          }}
-                        >
-                          <Download className="w-4 h-4" />
-                          Download
-                        </Button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="col-span-full py-20 text-center bg-white rounded-[3rem] border-4 border-dashed border-gray-100">
-                      <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                      <p className="text-xl font-bold text-gray-400 uppercase tracking-tight">No public resources available</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ) : activeTab === 'class-management' ? (
-            <div className="space-y-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-3xl font-black text-kenya-black uppercase tracking-tight">Class Management</h1>
-                  <p className="text-gray-500">Managing {managedClass?.name || 'Assigned Class'}</p>
-                </div>
-                <Button onClick={() => setShowAddStudentModal(true)} className="gap-2 rounded-2xl">
-                  <UserPlus className="w-4 h-4" />
-                  Admit Student
+                <Button onClick={() => setShowAddMaterialModal(true)} className="gap-2 rounded-2xl shadow-lg shadow-kenya-green/20">
+                  <Upload className="w-5 h-5" />
+                  Upload Material
                 </Button>
               </div>
 
               <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
-                <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-kenya-black">Student List</h3>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 bg-kenya-green/10 text-kenya-green rounded-full text-[10px] font-black uppercase tracking-widest">
-                      {allStudents.filter(s => s.class === managedClass?.name).length} Students
-                    </span>
-                  </div>
-                </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left min-w-[600px]">
+                  <table className="w-full text-left">
                     <thead>
                       <tr className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                        <th className="px-8 py-4">Admission No</th>
-                        <th className="px-8 py-4">Full Name</th>
-                        <th className="px-8 py-4">Stream</th>
+                        <th className="px-8 py-4">Title</th>
+                        <th className="px-8 py-4">Subject</th>
                         <th className="px-8 py-4">Status</th>
                         <th className="px-8 py-4 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {allStudents
-                        .filter(s => s.class?.trim() === managedClass?.name?.trim())
-                        .map((student) => (
-                          <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
-                            <td className="px-8 py-6 font-mono text-sm text-gray-500">{student.adm}</td>
-                            <td className="px-8 py-6 font-bold text-kenya-black">{student.name}</td>
-                            <td className="px-8 py-6 text-sm text-gray-500">
-                              {streams.find(st => st.id === student.streamId)?.name || 'N/A'}
-                            </td>
-                            <td className="px-8 py-6">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-kenya-green/10 text-kenya-green">
-                                {student.status || 'Active'}
-                              </span>
-                            </td>
-                            <td className="px-8 py-6 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <button 
-                                  onClick={() => deleteStudent(student.id)}
-                                  className="p-2 text-gray-400 hover:text-kenya-red transition-colors"
-                                  title="Remove Student"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                      {examMaterials.filter(m => m.teacherName === currentTeacher.name).map((material) => (
+                        <tr key={material.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-8 py-6">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-gray-100 rounded-lg">
+                                <FileText className="w-4 h-4 text-gray-500" />
                               </div>
-                            </td>
-                          </tr>
-                        ))}
-                      {allStudents.filter(s => s.class === managedClass?.name).length === 0 && (
+                              <span className="font-bold text-kenya-black">{material.title}</span>
+                            </div>
+                          </td>
+                          <td className="px-8 py-6 font-bold text-kenya-green text-sm">{material.subject}</td>
+                          <td className="px-8 py-6">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              material.status === 'Approved' ? 'bg-kenya-green/10 text-kenya-green' :
+                              material.status === 'Rejected' ? 'bg-kenya-red/10 text-kenya-red' : 'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {material.status}
+                            </span>
+                          </td>
+                          <td className="px-8 py-6 text-right">
+                            <button 
+                              onClick={() => deleteMaterial(material.id)}
+                              className="p-2 text-gray-400 hover:text-kenya-red transition-colors"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {examMaterials.filter(m => m.teacherName === currentTeacher.name).length === 0 && (
                         <tr>
-                          <td colSpan={5} className="px-8 py-20 text-center text-gray-400 italic">
-                            No students admitted to this class yet.
+                          <td colSpan={4} className="px-8 py-12 text-center text-gray-400 italic">
+                            No materials uploaded yet.
                           </td>
                         </tr>
                       )}
@@ -1509,77 +1452,52 @@ export const TeacherDashboard = () => {
                 </div>
               </div>
             </div>
-          ) : activeTab === 'profile' ? (
-            <div className="max-w-4xl mx-auto space-y-8">
-              <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
-                <div className="h-48 bg-kenya-black relative">
-                  <div className="absolute -bottom-16 left-12">
-                    <div className="relative group">
-                      <div className="w-32 h-32 rounded-[2rem] bg-white p-2 shadow-xl">
-                        <div className="w-full h-full rounded-[1.5rem] bg-gray-100 overflow-hidden flex items-center justify-center">
-                          {profilePhoto ? (
-                            <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
-                          ) : (
-                            <Users className="w-12 h-12 text-gray-300" />
-                          )}
-                        </div>
-                      </div>
-                      <label className="absolute bottom-2 right-2 p-2 bg-kenya-green text-white rounded-xl shadow-lg cursor-pointer hover:scale-110 transition-transform">
-                        <Upload className="w-4 h-4" />
-                        <input type="file" className="hidden" accept="image/*" onChange={handleProfilePhotoUpload} />
-                      </label>
-                    </div>
-                  </div>
+          ) : activeTab === 'class-management' ? (
+            <div className="space-y-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-black text-kenya-black uppercase tracking-tight">Class Management</h1>
+                  <p className="text-gray-500">Managing learners for <span className="font-bold text-kenya-green">{managedClass}</span></p>
                 </div>
-                
-                <div className="pt-20 p-12">
-                  <div className="flex justify-between items-start mb-12">
-                    <div>
-                      <h1 className="text-3xl font-black text-kenya-black uppercase tracking-tight mb-2">{currentTeacher.name}</h1>
-                      <div className="flex items-center gap-3">
-                        <span className="px-3 py-1 bg-kenya-green/10 text-kenya-green rounded-full text-[10px] font-black uppercase tracking-widest">
-                          {currentTeacher.role}
-                        </span>
-                        <span className="text-gray-400">•</span>
-                        <p className="text-gray-500 font-medium">Mathematics Department</p>
-                      </div>
-                    </div>
-                    <Button variant="secondary" className="rounded-2xl">Edit Profile</Button>
-                  </div>
+                <Button onClick={() => setShowAddStudentModal(true)} className="gap-2 rounded-2xl shadow-lg shadow-kenya-green/20">
+                  <Plus className="w-5 h-5" />
+                  Admit New Learner
+                </Button>
+              </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                      <h3 className="text-sm font-black text-kenya-black uppercase tracking-widest border-b border-gray-100 pb-2">Assigned Classes</h3>
-                      <div className="flex flex-wrap gap-3">
-                        {assignedClasses.map(c => (
-                          <div key={c} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl flex items-center gap-3">
-                            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-kenya-green font-bold shadow-sm">
-                              {c.charAt(0)}
-                            </div>
-                            <span className="font-bold text-kenya-black">{c}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="space-y-6">
-                      <h3 className="text-sm font-black text-kenya-black uppercase tracking-widest border-b border-gray-100 pb-2">Account Details</h3>
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between py-2 border-b border-gray-50">
-                          <span className="text-sm text-gray-500">Email</span>
-                          <span className="text-sm font-bold text-kenya-black">{currentTeacher.email || 'teacher@alakara.ac.ke'}</span>
-                        </div>
-                        <div className="flex items-center justify-between py-2 border-b border-gray-50">
-                          <span className="text-sm text-gray-500">Employee ID</span>
-                          <span className="text-sm font-bold text-kenya-black">EMP-2024-089</span>
-                        </div>
-                        <div className="flex items-center justify-between py-2 border-b border-gray-50">
-                          <span className="text-sm text-gray-500">Status</span>
-                          <span className="text-sm font-bold text-kenya-green">Active</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+              <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        <th className="px-8 py-4">Admission No</th>
+                        <th className="px-8 py-4">Student Name</th>
+                        <th className="px-8 py-4">Status</th>
+                        <th className="px-8 py-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {allStudents.filter(s => s.class === managedClass).map((student) => (
+                        <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-8 py-6 font-mono text-sm text-gray-500">{student.adm}</td>
+                          <td className="px-8 py-6 font-bold text-kenya-black">{student.name}</td>
+                          <td className="px-8 py-6">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black bg-kenya-green/10 text-kenya-green uppercase">
+                              Active
+                            </span>
+                          </td>
+                          <td className="px-8 py-6 text-right">
+                            <button 
+                              onClick={() => deleteStudent(student.id)}
+                              className="p-2 text-gray-400 hover:text-kenya-red transition-colors"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -1588,8 +1506,16 @@ export const TeacherDashboard = () => {
               <h2 className="text-2xl font-bold text-kenya-black mb-4">My Profile</h2>
               <div className="space-y-4">
                 <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
-                  <div className="w-16 h-16 rounded-full bg-kenya-green/10 flex items-center justify-center">
-                    <GraduationCap className="w-8 h-8 text-kenya-green" />
+                  <div className="relative group w-16 h-16 rounded-full bg-kenya-green/10 flex items-center justify-center overflow-hidden">
+                    {currentTeacher.avatar_url ? (
+                      <img src={currentTeacher.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <GraduationCap className="w-8 h-8 text-kenya-green" />
+                    )}
+                    <label className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+                      <Upload className="w-4 h-4 text-white" />
+                      <input type="file" className="hidden" accept="image/*" onChange={handleProfilePhotoUpload} />
+                    </label>
                   </div>
                   <div>
                     <p className="text-xl font-bold text-kenya-black">{currentTeacher.name}</p>
@@ -1610,7 +1536,125 @@ export const TeacherDashboard = () => {
             </div>
           )}
         </div>
-        {/* Add Material Modal */}
+        {/* Add Assignment Modal */}
+      {showAddAssignmentModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-2xl font-black text-kenya-black">New Assignment</h2>
+              <button 
+                onClick={() => setShowAddAssignmentModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const assignment = {
+                id: Math.random().toString(36).substr(2, 9),
+                ...newAssignment,
+                teacherId: currentTeacher.id,
+                createdAt: new Date().toISOString()
+              };
+              setAssignments([assignment, ...assignments]);
+              setShowAddAssignmentModal(false);
+              setNewAssignment({ title: '', description: '', dueDate: '', maxMarks: 100, class: assignedClasses[0] || '', subject: learningAreas[0] || '' });
+            }} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700">Assignment Title</label>
+                <input 
+                  type="text"
+                  required
+                  value={newAssignment.title}
+                  onChange={(e) => setNewAssignment({...newAssignment, title: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20"
+                  placeholder="e.g. Algebra Homework"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700">Description</label>
+                <textarea 
+                  required
+                  value={newAssignment.description}
+                  onChange={(e) => setNewAssignment({...newAssignment, description: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20 h-24 resize-none"
+                  placeholder="Instructions for the assignment..."
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700">Class</label>
+                  <select 
+                    required
+                    value={newAssignment.class}
+                    onChange={(e) => setNewAssignment({...newAssignment, class: e.target.value})}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20"
+                  >
+                    <option value="">Select Class</option>
+                    {assignedClasses.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700">Subject</label>
+                  <select 
+                    required
+                    value={newAssignment.subject}
+                    onChange={(e) => setNewAssignment({...newAssignment, subject: e.target.value})}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20"
+                  >
+                    <option value="">Select Subject</option>
+                    {learningAreas.map(la => (
+                      <option key={la} value={la}>{la}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700">Due Date</label>
+                  <input 
+                    type="date"
+                    required
+                    value={newAssignment.dueDate}
+                    onChange={(e) => setNewAssignment({...newAssignment, dueDate: e.target.value})}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700">Max Marks</label>
+                  <input 
+                    type="number"
+                    required
+                    min="1"
+                    value={newAssignment.maxMarks}
+                    onChange={(e) => setNewAssignment({...newAssignment, maxMarks: parseInt(e.target.value)})}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-kenya-green/20"
+                  />
+                </div>
+              </div>
+              
+              <div className="pt-4 flex gap-4">
+                <Button type="button" variant="secondary" onClick={() => setShowAddAssignmentModal(false)} className="flex-1">
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1">
+                  Create
+                </Button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Add Material Modal */}
         {showAddMaterialModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-kenya-black/60 backdrop-blur-sm">
             <motion.div 
@@ -1661,32 +1705,98 @@ export const TeacherDashboard = () => {
                     <option value="ZIP">Compressed Archive</option>
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-kenya-black ml-1">Select File</label>
-                  <div className="relative">
-                    <input 
-                      type="file" 
-                      required
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] || null;
-                        setNewMaterial({...newMaterial, file});
-                      }}
-                      className="hidden"
-                      id="material-file-upload"
-                    />
-                    <label 
-                      htmlFor="material-file-upload"
-                      className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors"
-                    >
-                      <span className="text-sm text-gray-500 truncate">
-                        {newMaterial.file ? newMaterial.file.name : 'Choose a file...'}
-                      </span>
-                      <Upload className="w-4 h-4 text-kenya-green" />
-                    </label>
-                  </div>
-                </div>
                 <Button type="submit" className="w-full py-4 rounded-xl font-bold">Upload & Send for Approval</Button>
               </form>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Bulk Upload Preview Modal */}
+        {showBulkPreview && bulkPreviewData && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-kenya-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white rounded-[2.5rem] w-full max-w-4xl p-8 shadow-2xl border border-gray-100 max-h-[90vh] flex flex-col"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-2xl font-bold text-kenya-black">Preview Marks Import</h3>
+                  <p className="text-sm text-gray-500">Review the data before saving.</p>
+                </div>
+                <button onClick={() => { setShowBulkPreview(false); setBulkPreviewData(null); }} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto border border-gray-100 rounded-2xl mb-6">
+                <table className="w-full text-left">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Admission No</th>
+                      {bulkPreviewData.type === 'multi' ? (
+                        Object.keys(bulkPreviewData.subjectIndices).map(subject => (
+                          <th key={subject} className="px-6 py-4">{subject}</th>
+                        ))
+                      ) : (
+                        <th className="px-6 py-4">Score</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {bulkPreviewData.data.slice(bulkPreviewData.type === 'multi' ? 1 : 0).map((row: any, index: number) => {
+                      if (bulkPreviewData.type === 'single' && index === 0 && isNaN(Number(row[1]))) return null;
+                      const admNo = String(row[0]).trim();
+                      const student = allStudents.find(s => s.adm === admNo);
+                      let hasError = !student;
+                      
+                      if (!hasError && bulkPreviewData.type === 'multi') {
+                        Object.values(bulkPreviewData.subjectIndices).forEach((idx: any) => {
+                          const score = parseFloat(row[idx]);
+                          if (score > 100 || score < 0) hasError = true;
+                        });
+                      } else if (!hasError && bulkPreviewData.type === 'single') {
+                        const score = parseFloat(row[1]);
+                        if (score > 100 || score < 0) hasError = true;
+                      }
+
+                      return (
+                        <tr key={index} className={hasError ? 'bg-red-50/50' : 'hover:bg-gray-50/50'}>
+                          <td className="px-6 py-4">
+                            {student ? (
+                              hasError ? (
+                                <span className="text-red-600 flex items-center gap-1 text-xs font-bold"><AlertCircle className="w-4 h-4" /> Invalid Marks</span>
+                              ) : (
+                                <span className="text-kenya-green flex items-center gap-1 text-xs font-bold"><CheckCircle2 className="w-4 h-4" /> Valid</span>
+                              )
+                            ) : (
+                              <span className="text-red-600 flex items-center gap-1 text-xs font-bold"><AlertCircle className="w-4 h-4" /> Student Not Found</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 font-mono text-sm">{admNo}</td>
+                          {bulkPreviewData.type === 'multi' ? (
+                            Object.values(bulkPreviewData.subjectIndices).map((idx: any, i) => (
+                              <td key={i} className={`px-6 py-4 font-bold ${parseFloat(row[idx]) > 100 || parseFloat(row[idx]) < 0 ? 'text-red-600' : 'text-kenya-black'}`}>
+                                {row[idx] !== undefined ? row[idx] : '--'}
+                              </td>
+                            ))
+                          ) : (
+                            <td className={`px-6 py-4 font-bold ${parseFloat(row[1]) > 100 || parseFloat(row[1]) < 0 ? 'text-red-600' : 'text-kenya-black'}`}>
+                              {row[1]}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end gap-4 mt-auto">
+                <Button variant="secondary" onClick={() => { setShowBulkPreview(false); setBulkPreviewData(null); }}>Cancel</Button>
+                <Button onClick={confirmBulkUpload}>Confirm & Save Marks</Button>
+              </div>
             </motion.div>
           </div>
         )}
@@ -1740,91 +1850,6 @@ export const TeacherDashboard = () => {
                 </div>
                 <Button type="submit" className="w-full py-4 rounded-xl font-bold">Admit Learner</Button>
               </form>
-            </motion.div>
-          </div>
-        )}
-        {/* Import Preview Modal */}
-        {showImportPreview && (
-          <div className="fixed inset-0 bg-kenya-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-[2.5rem] w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl"
-            >
-              <div className="p-8 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                <div>
-                  <h2 className="text-2xl font-black text-kenya-black uppercase tracking-tight">CSV Import Preview</h2>
-                  <p className="text-sm text-gray-500">Review the data before confirming the import.</p>
-                </div>
-                <button onClick={() => setShowImportPreview(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-8">
-                {importErrors.length > 0 && (
-                  <div className="mb-8 p-4 bg-kenya-red/10 border border-kenya-red/20 rounded-2xl">
-                    <div className="flex items-center gap-2 text-kenya-red font-bold mb-2">
-                      <AlertCircle className="w-5 h-5" />
-                      Import Errors Found
-                    </div>
-                    <ul className="text-sm text-kenya-red/80 list-disc list-inside">
-                      {importErrors.map((err, i) => <li key={i}>{err}</li>)}
-                    </ul>
-                  </div>
-                )}
-
-                <div className="overflow-x-auto border border-gray-100 rounded-2xl">
-                  <table className="w-full text-left min-w-[500px]">
-                    <thead>
-                      <tr className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                        <th className="px-6 py-4">Adm No</th>
-                        <th className="px-6 py-4">Student Name</th>
-                        <th className="px-6 py-4 text-center">Score</th>
-                        <th className="px-6 py-4">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {importPreviewData.map((row, i) => (
-                        <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                          <td className="px-6 py-4 font-mono text-sm text-gray-500">{row.adm}</td>
-                          <td className="px-6 py-4 font-bold text-kenya-black">{row.name}</td>
-                          <td className="px-6 py-4 text-center">
-                            <span className={`font-black text-lg ${row.isValid ? 'text-kenya-black' : 'text-kenya-red'}`}>
-                              {row.score}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            {row.isValid ? (
-                              <span className="text-kenya-green flex items-center gap-1 text-[10px] font-black uppercase">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Valid
-                              </span>
-                            ) : (
-                              <span className="text-kenya-red flex items-center gap-1 text-[10px] font-black uppercase">
-                                <AlertCircle className="w-3 h-3" />
-                                Invalid
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="p-8 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-4">
-                <Button variant="ghost" onClick={() => setShowImportPreview(false)} className="rounded-2xl">Cancel</Button>
-                <Button 
-                  onClick={confirmImport} 
-                  disabled={importPreviewData.length === 0 || importPreviewData.every(r => !r.isValid)}
-                  className="rounded-2xl gap-2 shadow-lg shadow-kenya-green/20"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Confirm Import ({importPreviewData.filter(r => r.isValid).length} Records)
-                </Button>
-              </div>
             </motion.div>
           </div>
         )}
