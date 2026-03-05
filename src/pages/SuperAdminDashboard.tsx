@@ -71,9 +71,63 @@ interface ExamMaterial {
   visibility: 'Public' | 'Hidden';
 }
 
+import { supabase } from '../lib/supabase';
+import { supabaseService } from '../services/supabaseService';
+
 export const SuperAdminDashboard = () => {
   const navigate = useNavigate();
+  const [adminProfile, setAdminProfile] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'schools' | 'analytics' | 'exams' | 'stories'>('dashboard');
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (profile && profile.role === 'super-admin') {
+          setAdminProfile(profile);
+          loadSchools();
+        } else {
+          navigate('/super-admin');
+        }
+      } else {
+        // Fallback for mock login if no session
+        const isMockLoggedIn = true; // For now assume mock login works if navigated here
+        if (isMockLoggedIn) loadSchools();
+        else navigate('/super-admin');
+      }
+    };
+
+    const loadSchools = async () => {
+      try {
+        const data = await supabaseService.getAllSchools();
+        if (data) {
+          const mappedSchools: School[] = data.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            location: s.location,
+            students: '0', // This would need a count query in a real app
+            status: 'Active', // Default status
+            date: new Date(s.created_at).toLocaleDateString(),
+            principalEmail: s.principal_email,
+            principalPass: '********', // Don't show real passwords
+            teacherEmail: `staff.${s.name.toLowerCase().replace(/\s+/g, '')}@alakara.ac.ke`,
+            teacherPass: '********'
+          }));
+          setSchools(mappedSchools);
+        }
+      } catch (err) {
+        console.error('Error loading schools:', err);
+      }
+    };
+
+    checkSession();
+  }, [navigate]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showStoryModal, setShowStoryModal] = useState(false);
   const [generatedCreds, setGeneratedCreds] = useState<{ principal: string; teacher: string; pass: string } | null>(null);
@@ -156,60 +210,7 @@ export const SuperAdminDashboard = () => {
     localStorage.setItem('alakara_exam_materials', JSON.stringify(examMaterials));
   }, [examMaterials]);
   
-  const [schools, setSchools] = useState<School[]>(() => {
-    const saved = localStorage.getItem('alakara_schools');
-    if (saved) return JSON.parse(saved);
-    // Set default expiry dates for demo: 30 days from now
-    const defaultExpiry = new Date();
-    defaultExpiry.setDate(defaultExpiry.getDate() + 30);
-    const expiryStr = defaultExpiry.toISOString().split('T')[0];
-
-    return [
-      { 
-        id: '1', 
-        name: 'Oakwood Academy', 
-        location: 'Nairobi, KE', 
-        students: '1,200', 
-        status: 'Active', 
-        date: '2 hours ago',
-        principalEmail: 'principal.oakwood@alakara.ac.ke',
-        principalPass: 'P@ss123',
-        teacherEmail: 'staff.oakwood@alakara.ac.ke',
-        teacherPass: 'T@ech456',
-        subscriptionExpiresAt: expiryStr
-      },
-      { 
-        id: '2', 
-        name: 'City High School', 
-        location: 'Mombasa, KE', 
-        students: '2,450', 
-        status: 'Active', 
-        date: '5 hours ago',
-        principalEmail: 'principal.cityhigh@alakara.ac.ke',
-        principalPass: 'P@ss123',
-        teacherEmail: 'staff.cityhigh@alakara.ac.ke',
-        teacherPass: 'T@ech456',
-        subscriptionExpiresAt: expiryStr
-      },
-      { 
-        id: '3', 
-        name: 'Global International', 
-        location: 'Kisumu, KE', 
-        students: '850', 
-        status: 'Pending', 
-        date: '1 day ago',
-        principalEmail: 'principal.global@alakara.ac.ke',
-        principalPass: 'P@ss123',
-        teacherEmail: 'staff.global@alakara.ac.ke',
-        teacherPass: 'T@ech456',
-        subscriptionExpiresAt: expiryStr
-      },
-    ];
-  });
-
-  useEffect(() => {
-    localStorage.setItem('alakara_schools', JSON.stringify(schools));
-  }, [schools]);
+  const [schools, setSchools] = useState<School[]>([]);
 
   const [newSchool, setNewSchool] = useState({
     name: '',
@@ -253,15 +254,24 @@ export const SuperAdminDashboard = () => {
       subscriptionExpiresAt: expiryStr
     };
 
-    setSchools([school, ...schools]);
-    setGeneratedCreds({ principal: creds.principal, teacher: creds.teacher, pass: creds.pass });
-    setNewSchool({ name: '', location: '', students: '' });
+    // Save to Supabase
+    supabase.from('schools').insert({
+      name: newSchool.name,
+      location: newSchool.location,
+      type: 'Secondary', // Default
+      principal_name: 'Principal',
+      principal_email: creds.principal
+    }).then(() => {
+      setSchools([school, ...schools]);
+      setGeneratedCreds({ principal: creds.principal, teacher: creds.teacher, pass: creds.pass });
+      setNewSchool({ name: '', location: '', students: '' });
 
-    addNotification({
-      title: 'New School Registered',
-      message: `${school.name} has been successfully registered on the platform.`,
-      type: 'success',
-      role: 'super-admin'
+      addNotification({
+        title: 'New School Registered',
+        message: `${school.name} has been successfully registered on the platform.`,
+        type: 'success',
+        role: 'super-admin'
+      });
     });
   };
 
@@ -283,22 +293,6 @@ export const SuperAdminDashboard = () => {
     }
   };
 
-  useEffect(() => {
-    const loadSchools = () => {
-      const saved = localStorage.getItem('alakara_schools');
-      if (saved) {
-        setSchools(JSON.parse(saved));
-      }
-    };
-    loadSchools();
-    const interval = setInterval(loadSchools, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('alakara_schools', JSON.stringify(schools));
-  }, [schools]);
-
   const stats = [
     { label: 'Total Schools', value: schools.length.toString(), change: '+12%', icon: SchoolIcon, color: 'text-kenya-green', bg: 'bg-kenya-green/10' },
     { label: 'Active Exams', value: '45,201', change: '+18%', icon: BookOpen, color: 'text-kenya-red', bg: 'bg-kenya-red/10' },
@@ -306,7 +300,8 @@ export const SuperAdminDashboard = () => {
     { label: 'System Health', value: '99.9%', change: 'Stable', icon: ShieldCheck, color: 'text-kenya-green', bg: 'bg-kenya-green/10' },
   ];
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate('/super-admin');
   };
 
@@ -495,7 +490,7 @@ export const SuperAdminDashboard = () => {
             <div className="h-8 w-px bg-gray-200 mx-2" />
             <div className="flex items-center gap-3">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-bold text-kenya-black">Super Admin</p>
+                <p className="text-sm font-bold text-kenya-black">{adminProfile?.name || 'Solomon Isiya'}</p>
                 <p className="text-xs text-gray-500">System Controller</p>
               </div>
               <img 

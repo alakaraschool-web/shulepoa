@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { GraduationCap, Lock, User, ArrowLeft, ShieldAlert } from 'lucide-react';
+import { GraduationCap, Lock, User, ArrowLeft, ShieldAlert, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { PasswordResetModal } from '../components/PasswordResetModal';
+import { supabase } from '../lib/supabase';
 
 export const SuperAdminLogin = () => {
   const [username, setUsername] = useState('');
@@ -13,24 +14,83 @@ export const SuperAdminLogin = () => {
   const [showResetModal, setShowResetModal] = useState(false);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    // Check if already logged in as super-admin
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (profile && profile.role === 'super-admin') {
+          navigate('/super-admin/dashboard');
+        }
+      }
+    };
+    checkSession();
+  }, [navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
-    // Mock login logic - in a real app, this would verify against Supabase or a secure backend
-    setTimeout(() => {
+    try {
+      // 1. Try Supabase Auth
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: username,
+        password: password,
+      });
+
+      if (!authError && data.user) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError || !profile || profile.role !== 'super-admin') {
+          // If profile doesn't exist or role is wrong, check if it's the requested super admin
+          if (username.toLowerCase() === 'bahatisolomon.bs@gmail.com') {
+            // Create profile if it doesn't exist (only for this specific email)
+            const { error: insertError } = await supabase.from('profiles').upsert({
+              id: data.user.id,
+              name: 'Solomon Isiya',
+              email: username.toLowerCase(),
+              role: 'super-admin'
+            });
+            
+            if (!insertError) {
+              navigate('/super-admin/dashboard');
+              return;
+            }
+          }
+          
+          await supabase.auth.signOut();
+          throw new Error('Unauthorized access. Only super admins can log in here.');
+        }
+
+        navigate('/super-admin/dashboard');
+        return;
+      }
+
+      // 2. Fallback to hardcoded for prototype if Supabase fails or user not found
       if (username === 'admin' && password === 'admin123') {
-        // Success
-        console.log('Login successful');
-        // In a real app, you'd set auth state/cookies here
-        setIsLoading(false);
+        navigate('/super-admin/dashboard');
+      } else if (username.toLowerCase() === 'bahatisolomon.bs@gmail.com' && password === 'Godalways@95') {
+        // This is the requested super admin
         navigate('/super-admin/dashboard');
       } else {
-        setError('Invalid username or password');
-        setIsLoading(false);
+        setError(authError?.message || 'Invalid operator ID or access key');
       }
-    }, 1000);
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

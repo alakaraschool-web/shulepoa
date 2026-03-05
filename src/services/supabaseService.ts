@@ -168,5 +168,14 @@ export const supabaseService = {
       .from('public-resources')
       .getPublicUrl(fileName);
     return publicUrl;
+  },
+
+  // Super Admin
+  async getAllSchools() {
+    const { data, error } = await supabase
+      .from('schools')
+      .select('*');
+    if (error) throw error;
+    return data;
   }
 };
