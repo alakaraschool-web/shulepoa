@@ -16,8 +16,7 @@ import { PrincipalLogin } from './pages/PrincipalLogin';
 import { PrincipalDashboard } from './pages/PrincipalDashboard';
 import { StudentDashboard } from './pages/StudentDashboard';
 import { TeacherDashboard } from './pages/TeacherDashboard';
-
-import { SyncProvider } from './components/SyncProvider';
+import { SchoolRegistration } from './pages/SchoolRegistration';
 
 const LandingPage = () => (
   <>
@@ -36,23 +35,22 @@ const LandingPage = () => (
 
 export default function App() {
   return (
-    <SyncProvider>
-      <Router>
-        <div className="min-h-screen bg-white font-sans selection:bg-blue-100 selection:text-blue-900">
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<LoginChoice />} />
-            <Route path="/super-admin" element={<SuperAdminLogin />} />
-            <Route path="/teacher-login" element={<TeacherLogin />} />
-            <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
-            <Route path="/student-login" element={<StudentLogin />} />
-            <Route path="/student/dashboard" element={<StudentDashboard />} />
-            <Route path="/principal-login" element={<PrincipalLogin />} />
-            <Route path="/principal/dashboard" element={<PrincipalDashboard />} />
-            <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
-          </Routes>
-        </div>
-      </Router>
-    </SyncProvider>
+    <Router>
+      <div className="min-h-screen bg-white font-sans selection:bg-blue-100 selection:text-blue-900">
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LoginChoice />} />
+          <Route path="/super-admin" element={<SuperAdminLogin />} />
+          <Route path="/teacher-login" element={<TeacherLogin />} />
+          <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+          <Route path="/student-login" element={<StudentLogin />} />
+          <Route path="/student/dashboard" element={<StudentDashboard />} />
+          <Route path="/principal-login" element={<PrincipalLogin />} />
+          <Route path="/register-school" element={<SchoolRegistration />} />
+          <Route path="/principal/dashboard" element={<PrincipalDashboard />} />
+          <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
+        </Routes>
+      </div>
+    </Router>
   );
 }

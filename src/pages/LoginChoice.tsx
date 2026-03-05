@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { GraduationCap, ShieldAlert, BookOpen, Users, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { GraduationCap, ShieldAlert, BookOpen, Users, ArrowLeft, ShieldCheck, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
 
@@ -29,13 +29,22 @@ export const LoginChoice = () => {
       color: 'bg-kenya-red',
       hoverColor: 'hover:bg-red-700',
     },
+    {
+      title: 'Register School',
+      description: 'New school? Register your institution to start using Alakara KE today.',
+      icon: Building2,
+      path: '/register-school',
+      color: 'bg-kenya-green',
+      hoverColor: 'hover:bg-green-700',
+      isRegistration: true
+    },
   ];
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'var(--background-kenya-pattern)', backgroundSize: '40px 40px' }} />
       
-      <div className="sm:mx-auto sm:w-full sm:max-w-4xl relative z-10 px-4">
+      <div className="sm:mx-auto sm:w-full sm:max-w-6xl relative z-10 px-4">
         <Link to="/" className="flex items-center justify-center gap-2 mb-12 group">
           <div className="bg-kenya-green p-2 rounded-lg group-hover:scale-110 transition-transform">
             <GraduationCap className="w-8 h-8 text-white" />
@@ -46,11 +55,11 @@ export const LoginChoice = () => {
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-kenya-black mb-4">Select Your Portal</h1>
           <p className="text-gray-600 max-w-lg mx-auto">
-            Choose the appropriate access point to continue to your Alakara KE dashboard.
+            Choose the appropriate access point or register your school to continue.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {portals.map((portal, index) => (
             <motion.div
               key={portal.title}

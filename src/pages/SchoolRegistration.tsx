@@ -10,10 +10,12 @@ import {
   ArrowRight, 
   CheckCircle2,
   ShieldCheck,
-  Phone
+  Phone,
+  Loader2
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
+import { supabase } from '../lib/supabase';
 
 export const SchoolRegistration = () => {
   const navigate = useNavigate();
@@ -62,13 +64,55 @@ export const SchoolRegistration = () => {
     setIsLoading(true);
     setError('');
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // 1. Sign up user in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.principalEmail,
+        password: formData.password,
+        options: {
+          data: {
+            name: formData.principalName,
+            role: 'principal'
+          }
+        }
+      });
+
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Registration failed');
+
+      // 2. Create School in Supabase
+      const { data: schoolData, error: schoolError } = await supabase
+        .from('schools')
+        .insert({
+          name: formData.schoolName,
+          location: formData.location,
+          type: formData.schoolType,
+          principal_name: formData.principalName,
+          principal_email: formData.principalEmail
+        })
+        .select()
+        .single();
+
+      if (schoolError) throw schoolError;
+
+      // 3. Create Profile in Supabase
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: authData.user.id,
+          name: formData.principalName,
+          email: formData.principalEmail,
+          role: 'principal',
+          school_id: schoolData.id
+        });
+
+      if (profileError) throw profileError;
+
+      // Fallback for prototype/legacy
       const savedSchools = localStorage.getItem('alakara_schools');
       const schools = savedSchools ? JSON.parse(savedSchools) : [];
-      
       const newSchool = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: schoolData.id,
         name: formData.schoolName,
         location: formData.location,
         type: formData.schoolType,
@@ -80,13 +124,15 @@ export const SchoolRegistration = () => {
         students: '0',
         subscriptionExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
       };
-
       localStorage.setItem('alakara_schools', JSON.stringify([...schools, newSchool]));
       localStorage.setItem('alakara_current_school', JSON.stringify(newSchool));
       
-      setIsLoading(false);
       setStep(3); // Success step
-    }, 1500);
+    } catch (err: any) {
+      setError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { GraduationCap, Lock, User, ArrowLeft, Rocket } from 'lucide-react';
+import { GraduationCap, Lock, User, ArrowLeft, Rocket, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { PasswordResetModal } from '../components/PasswordResetModal';
+import { supabase } from '../lib/supabase';
 
 export const StudentLogin = () => {
   const [username, setUsername] = useState('');
@@ -13,12 +14,76 @@ export const StudentLogin = () => {
   const [showResetModal, setShowResetModal] = useState(false);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    // Check if already logged in
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (profile && profile.role === 'student') {
+          // Fetch student data
+          const { data: student } = await supabase
+            .from('students')
+            .select('*')
+            .eq('id', profile.student_id)
+            .single();
+          
+          if (student) {
+            localStorage.setItem('alakara_current_student', JSON.stringify(student));
+            navigate('/student/dashboard');
+          }
+        }
+      }
+    };
+    checkSession();
+  }, [navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
-    setTimeout(() => {
+    try {
+      // 1. Try Supabase Auth
+      // Students use Admission Number as email prefix
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: `${username}@student.alakara.ac.ke`,
+        password: password,
+      });
+
+      if (!authError && data.user) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError || !profile || profile.role !== 'student') {
+          await supabase.auth.signOut();
+          throw new Error('Unauthorized access. Only students can log in here.');
+        }
+
+        const { data: student, error: studentError } = await supabase
+          .from('students')
+          .select('*')
+          .eq('id', profile.student_id)
+          .single();
+
+        if (studentError || !student) {
+          throw new Error('Student profile not found.');
+        }
+
+        localStorage.setItem('alakara_current_student', JSON.stringify(student));
+        navigate('/student/dashboard');
+        return;
+      }
+
+      // 2. Fallback to LocalStorage for prototype
       const students = JSON.parse(localStorage.getItem('alakara_students') || '[]');
       const student = students.find((s: any) => s.adm === username);
 
@@ -31,16 +96,17 @@ export const StudentLogin = () => {
       }
 
       if (isDefaultLogin || isValidPassword) {
-        setIsLoading(false);
-        // Store the logged in student for the dashboard
         const loggedInStudent = student || { id: 'S1', name: 'Alice Wanjiku', adm: 'ADM-2024-001', class: 'Form 1' };
         localStorage.setItem('alakara_current_student', JSON.stringify(loggedInStudent));
         navigate('/student/dashboard');
       } else {
-        setError('Check your Admission Number or Password (use one of your names)!');
-        setIsLoading(false);
+        setError(authError?.message || 'Check your Admission Number or Password (use one of your names)!');
       }
-    }, 1000);
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

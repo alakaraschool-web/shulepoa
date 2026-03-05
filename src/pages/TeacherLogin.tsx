@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { GraduationCap, Lock, User, ArrowLeft, BookOpen } from 'lucide-react';
+import { GraduationCap, Lock, User, ArrowLeft, BookOpen, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { PasswordResetModal } from '../components/PasswordResetModal';
+import { supabase } from '../lib/supabase';
 
 export const TeacherLogin = () => {
   const [username, setUsername] = useState('');
@@ -17,18 +18,67 @@ export const TeacherLogin = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  useEffect(() => {
+    // Check if already logged in
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (profile && profile.role === 'teacher') {
+          localStorage.setItem('alakara_current_teacher', JSON.stringify(profile));
+          navigate('/teacher/dashboard');
+        }
+      }
+    };
+    checkSession();
+  }, [navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
-    setTimeout(() => {
+    try {
+      // 1. Try Supabase Auth first
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: username.includes('@') ? username : `${username}@alakara.ac.ke`,
+        password: password,
+      });
+
+      if (!authError && data.user) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError || !profile || profile.role !== 'teacher') {
+          await supabase.auth.signOut();
+          throw new Error('Unauthorized access. Only teachers can log in here.');
+        }
+
+        localStorage.setItem('alakara_current_teacher', JSON.stringify(profile));
+        navigate('/teacher/dashboard');
+        return;
+      }
+
+      // 2. Fallback to LocalStorage for prototype/demo
       const staff = JSON.parse(localStorage.getItem('alakara_staff') || '[]');
       const teacher = staff.find((s: any) => s.username === username && s.password === password);
 
       if (teacher || ((username === 'teacher' || username === 'teacher@alakara.ac.ke') && password === 'teacher123')) {
-        setIsLoading(false);
-        const currentTeacher = teacher || { name: 'Teacher', role: 'Class Teacher', assignedClasses: ['Form 1', 'Grade 7'], username: 'teacher@alakara.ac.ke' };
+        const currentTeacher = teacher || { 
+          id: 'demo-teacher',
+          name: 'Demo Teacher', 
+          role: 'Class Teacher', 
+          assignments: [],
+          username: 'teacher@alakara.ac.ke' 
+        };
         
         if (currentTeacher.mustChangePassword) {
           setPendingTeacher(currentTeacher);
@@ -38,10 +88,13 @@ export const TeacherLogin = () => {
           navigate('/teacher/dashboard');
         }
       } else {
-        setError('Invalid teacher credentials');
-        setIsLoading(false);
+        setError(authError?.message || 'Invalid teacher credentials');
       }
-    }, 1000);
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handlePasswordChange = (e: React.FormEvent) => {

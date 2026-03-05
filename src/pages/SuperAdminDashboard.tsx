@@ -283,6 +283,22 @@ export const SuperAdminDashboard = () => {
     }
   };
 
+  useEffect(() => {
+    const loadSchools = () => {
+      const saved = localStorage.getItem('alakara_schools');
+      if (saved) {
+        setSchools(JSON.parse(saved));
+      }
+    };
+    loadSchools();
+    const interval = setInterval(loadSchools, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('alakara_schools', JSON.stringify(schools));
+  }, [schools]);
+
   const stats = [
     { label: 'Total Schools', value: schools.length.toString(), change: '+12%', icon: SchoolIcon, color: 'text-kenya-green', bg: 'bg-kenya-green/10' },
     { label: 'Active Exams', value: '45,201', change: '+18%', icon: BookOpen, color: 'text-kenya-red', bg: 'bg-kenya-red/10' },

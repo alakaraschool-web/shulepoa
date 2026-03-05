@@ -32,7 +32,7 @@ export const Letterhead: React.FC<{ settings: SchoolSettings; studentPhoto?: str
     );
   };
 
-  const coatOfArms = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/Coat_of_arms_of_Kenya_%28Official%29.svg/1200px-Coat_of_arms_of_Kenya_%28Official%29.svg.png";
+  const coatOfArms = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/Coat_of_arms_of_Kenya_%28Official%29.svg/512px-Coat_of_arms_of_Kenya_%28Official%29.svg.png";
 
   if (settings.letterheadTemplate === 'modern') {
     return (
